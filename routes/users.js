@@ -4,13 +4,63 @@ const User = require('../models/user');
 
 // Create or update user
 router.post('/update', async (req, res) => {
-  const { uid, name, photoUrl, email, bio, age, gender } = req.body;
+  const { 
+    uid, 
+    name, 
+    photoUrl, 
+    email, 
+    bio, 
+    age, 
+    gender, 
+    fcmToken, 
+    status, 
+    isOnline, 
+    lastSeen 
+  } = req.body;
+  
   try {
     const user = await User.findOneAndUpdate(
       { uid },
-      { $set: { name, photoUrl, email, bio, age, gender } },
+      { 
+        $set: { 
+          name, 
+          photoUrl, 
+          email, 
+          bio, 
+          age, 
+          gender, 
+          fcmToken, 
+          status, 
+          isOnline, 
+          lastSeen: lastSeen ? new Date(lastSeen) : new Date()
+        } 
+      },
       { upsert: true, new: true }
     );
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update user online status
+router.put('/status/:uid', async (req, res) => {
+  const { isOnline, status, lastSeen } = req.body;
+  try {
+    const user = await User.findOneAndUpdate(
+      { uid: req.params.uid },
+      { 
+        $set: { 
+          isOnline, 
+          status, 
+          lastSeen: lastSeen ? new Date(lastSeen) : new Date()
+        } 
+      },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
