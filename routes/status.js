@@ -122,21 +122,34 @@ router.post('/view/:statusId', async (req, res) => {
   }
 });
 
-// Delete a status
+// Delete a particular status
 router.delete('/:statusId', async (req, res) => {
   try {
     const { userId } = req.body;
+    const { statusId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    // Find the status document containing the specific status
     const statusDoc = await Status.findOne({
       userId,
-      'statuses._id': req.params.statusId
+      'statuses._id': statusId
     });
 
     if (!statusDoc) {
+      return res.status(404).json({ error: 'Status not found or you do not have permission to delete it' });
+    }
+
+    // Find the specific status in the array
+    const statusToDelete = statusDoc.statuses.id(statusId);
+    if (!statusToDelete) {
       return res.status(404).json({ error: 'Status not found' });
     }
 
     // Remove the specific status from the array
-    statusDoc.statuses.pull(req.params.statusId);
+    statusDoc.statuses.pull(statusId);
 
     // If no statuses left, delete the entire document
     if (statusDoc.statuses.length === 0) {
@@ -147,13 +160,19 @@ router.delete('/:statusId', async (req, res) => {
 
     // Emit socket event for status deletion
     req.app.get('io').emit('status:deleted', {
-      statusId: req.params.statusId,
-      userId
+      statusId,
+      userId,
+      deletedAt: new Date()
     });
 
-    res.json({ success: true });
+    res.json({ 
+      success: true,
+      message: 'Status deleted successfully',
+      remainingStatuses: statusDoc.statuses.length
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error deleting status:', err);
+    res.status(500).json({ error: 'Failed to delete status' });
   }
 });
 
