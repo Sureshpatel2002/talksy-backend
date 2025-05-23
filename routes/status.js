@@ -8,14 +8,29 @@ router.post('/create', async (req, res) => {
   try {
     const { userId, mediaUrl, type, caption } = req.body;
 
-    const newStatus = new Status({
-      userId,
-      mediaUrl,
-      type,
-      caption
-    });
+    // Check if user already has a status document
+    let statusDoc = await Status.findOne({ userId });
 
-    const savedStatus = await newStatus.save();
+    if (statusDoc) {
+      // Add new status to existing list
+      statusDoc.statuses.push({
+        mediaUrl,
+        type,
+        caption
+      });
+    } else {
+      // Create new status document with first status
+      statusDoc = new Status({
+        userId,
+        statuses: [{
+          mediaUrl,
+          type,
+          caption
+        }]
+      });
+    }
+
+    const savedStatus = await statusDoc.save();
 
     // Emit socket event for new status
     req.app.get('io').emit('status:new', {
@@ -39,21 +54,10 @@ router.get('/all', async (req, res) => {
       expiresAt: { $gt: new Date() }
     }).sort({ createdAt: -1 });
 
-    // Group statuses by user
-    const statusesByUser = await Promise.all(
-      statuses.reduce((acc, status) => {
-        if (!acc[status.userId]) {
-          acc[status.userId] = [];
-        }
-        acc[status.userId].push(status);
-        return acc;
-      }, {})
-    );
-
     // Get user details for each status group
     const statusesWithUsers = await Promise.all(
-      Object.entries(statusesByUser).map(async ([userId, userStatuses]) => {
-        const user = await User.findOne({ uid: userId });
+      statuses.map(async (statusDoc) => {
+        const user = await User.findOne({ uid: statusDoc.userId });
         return {
           user: {
             uid: user.uid,
@@ -62,13 +66,13 @@ router.get('/all', async (req, res) => {
             isOnline: user.isOnline,
             lastSeen: user.lastSeen
           },
-          statuses: userStatuses.map(status => ({
+          statuses: statusDoc.statuses.map(status => ({
             id: status._id,
             mediaUrl: status.mediaUrl,
             type: status.type,
             caption: status.caption,
             createdAt: status.createdAt,
-            expiresAt: status.expiresAt,
+            expiresAt: statusDoc.expiresAt,
             viewers: status.viewers,
             hasViewed: status.viewers.some(viewer => viewer.userId === userId)
           }))
@@ -86,11 +90,16 @@ router.get('/all', async (req, res) => {
 router.post('/view/:statusId', async (req, res) => {
   try {
     const { userId } = req.body;
-    const status = await Status.findById(req.params.statusId);
+    const statusDoc = await Status.findOne({
+      'statuses._id': req.params.statusId
+    });
 
-    if (!status) {
+    if (!statusDoc) {
       return res.status(404).json({ error: 'Status not found' });
     }
+
+    // Find the specific status in the array
+    const status = statusDoc.statuses.id(req.params.statusId);
 
     // Add viewer if not already viewed
     if (!status.viewers.some(viewer => viewer.userId === userId)) {
@@ -98,7 +107,7 @@ router.post('/view/:statusId', async (req, res) => {
         userId,
         viewedAt: new Date()
       });
-      await status.save();
+      await statusDoc.save();
 
       // Emit socket event for status view
       req.app.get('io').emit('status:viewed', {
@@ -117,18 +126,28 @@ router.post('/view/:statusId', async (req, res) => {
 router.delete('/:statusId', async (req, res) => {
   try {
     const { userId } = req.body;
-    const status = await Status.findOneAndDelete({
-      _id: req.params.statusId,
-      userId // Ensure user can only delete their own status
+    const statusDoc = await Status.findOne({
+      userId,
+      'statuses._id': req.params.statusId
     });
 
-    if (!status) {
+    if (!statusDoc) {
       return res.status(404).json({ error: 'Status not found' });
+    }
+
+    // Remove the specific status from the array
+    statusDoc.statuses.pull(req.params.statusId);
+
+    // If no statuses left, delete the entire document
+    if (statusDoc.statuses.length === 0) {
+      await Status.deleteOne({ _id: statusDoc._id });
+    } else {
+      await statusDoc.save();
     }
 
     // Emit socket event for status deletion
     req.app.get('io').emit('status:deleted', {
-      statusId: status._id,
+      statusId: req.params.statusId,
       userId
     });
 

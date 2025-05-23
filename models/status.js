@@ -6,22 +6,28 @@ const StatusSchema = new mongoose.Schema({
     required: true,
     ref: 'User'
   },
-  mediaUrl: {
-    type: String,
-    required: true
-  },
-  type: {
-    type: String,
-    enum: ['image', 'video'],
-    required: true
-  },
-  caption: {
-    type: String,
-    default: ''
-  },
-  viewers: [{
-    userId: String,
-    viewedAt: {
+  statuses: [{
+    mediaUrl: {
+      type: String,
+      required: true
+    },
+    type: {
+      type: String,
+      enum: ['image', 'video'],
+      required: true
+    },
+    caption: {
+      type: String,
+      default: ''
+    },
+    viewers: [{
+      userId: String,
+      viewedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    createdAt: {
       type: Date,
       default: Date.now
     }
