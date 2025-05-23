@@ -2,11 +2,34 @@ const express = require('express');
 const router = express.Router();
 const Status = require('../models/status');
 const User = require('../models/user');
+const multer = require('multer');
 
-// Create a new status
-router.post('/create', async (req, res) => {
+// Configure multer for memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Not an image! Please upload an image.'), false);
+    }
+  }
+});
+
+// Create a new status with image
+router.post('/create', upload.single('media'), async (req, res) => {
   try {
-    const { userId, mediaUrl, type, caption } = req.body;
+    const { userId, caption, type } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Convert image to base64
+    const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
     // Check if user already has a status document
     let statusDoc = await Status.findOne({ userId });
@@ -14,18 +37,18 @@ router.post('/create', async (req, res) => {
     if (statusDoc) {
       // Add new status to existing list
       statusDoc.statuses.push({
-        mediaUrl,
-        type,
-        caption
+        mediaUrl: base64Image,
+        type: type || 'image',
+        caption: caption || ''
       });
     } else {
       // Create new status document with first status
       statusDoc = new Status({
         userId,
         statuses: [{
-          mediaUrl,
-          type,
-          caption
+          mediaUrl: base64Image,
+          type: type || 'image',
+          caption: caption || ''
         }]
       });
     }
@@ -40,7 +63,8 @@ router.post('/create', async (req, res) => {
 
     res.json(savedStatus);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error creating status:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -82,7 +106,8 @@ router.get('/all', async (req, res) => {
 
     res.json(statusesWithUsers);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error fetching statuses:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -95,7 +120,7 @@ router.post('/view/:statusId', async (req, res) => {
     });
 
     if (!statusDoc) {
-      return res.status(404).json({ error: 'Status not found' });
+      return res.status(404).json({ message: 'Status not found' });
     }
 
     // Find the specific status in the array
@@ -118,7 +143,8 @@ router.post('/view/:statusId', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error marking status as viewed:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -129,7 +155,7 @@ router.delete('/:statusId', async (req, res) => {
     const { statusId } = req.params;
 
     if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
+      return res.status(400).json({ message: 'User ID is required' });
     }
 
     // Find the status document containing the specific status
@@ -139,13 +165,13 @@ router.delete('/:statusId', async (req, res) => {
     });
 
     if (!statusDoc) {
-      return res.status(404).json({ error: 'Status not found or you do not have permission to delete it' });
+      return res.status(404).json({ message: 'Status not found or you do not have permission to delete it' });
     }
 
     // Find the specific status in the array
     const statusToDelete = statusDoc.statuses.id(statusId);
     if (!statusToDelete) {
-      return res.status(404).json({ error: 'Status not found' });
+      return res.status(404).json({ message: 'Status not found' });
     }
 
     // Remove the specific status from the array
@@ -172,7 +198,7 @@ router.delete('/:statusId', async (req, res) => {
     });
   } catch (err) {
     console.error('Error deleting status:', err);
-    res.status(500).json({ error: 'Failed to delete status' });
+    res.status(500).json({ message: 'Failed to delete status' });
   }
 });
 

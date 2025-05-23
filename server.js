@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
 const { initializeSocket } = require('./socket');
+const multer = require('multer');
 
 const app = express();
 app.use(cors());
@@ -84,8 +85,30 @@ io.on('connection', (socket) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  console.error('Error details:', {
+    message: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+    body: req.body,
+    file: req.file
+  });
+  
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        error: 'File size too large. Maximum size is 5MB'
+      });
+    }
+    return res.status(400).json({
+      error: err.message
+    });
+  }
+  
+  res.status(500).json({ 
+    error: 'Something went wrong!',
+    message: err.message
+  });
 });
 
 server.listen(PORT, () => {
