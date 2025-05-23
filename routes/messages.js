@@ -6,25 +6,34 @@ const Conversation = require('../models/conversation');
 // Send a message
 router.post('/send', async (req, res) => {
   try {
-    const { conversationId, senderId, receiverId, text, mediaUrl, mediaType } = req.body;
+    const { 
+      conversationId, 
+      senderId, 
+      receiverId, 
+      content, 
+      type, 
+      replyTo, 
+      metadata 
+    } = req.body;
     
     // Create new message
     const newMessage = new Message({
       conversationId,
       senderId,
       receiverId,
-      text,
-      mediaUrl,
-      mediaType
+      content,
+      type,
+      replyTo,
+      metadata,
+      timestamp: new Date()
     });
 
     // Save message
     const savedMessage = await newMessage.save();
 
-    // Update conversation's last message and unread count
+    // Update conversation's last message
     await Conversation.findByIdAndUpdate(conversationId, {
-      lastMessage: savedMessage._id,
-      $inc: { [`unreadCount.${receiverId}`]: 1 }
+      lastMessage: savedMessage._id
     });
 
     res.json(savedMessage);
@@ -38,31 +47,90 @@ router.get('/conversation/:conversationId', async (req, res) => {
   try {
     const messages = await Message.find({
       conversationId: req.params.conversationId
-    }).sort({ createdAt: 1 });
+    })
+    .populate('replyTo')
+    .sort({ timestamp: 1 });
     res.json(messages);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Mark messages as read
-router.put('/read/:conversationId', async (req, res) => {
+// Mark message as read
+router.put('/read/:messageId', async (req, res) => {
   try {
-    const { userId } = req.body;
+    const message = await Message.findByIdAndUpdate(
+      req.params.messageId,
+      { 
+        $set: { 
+          isRead: true,
+          readAt: new Date()
+        } 
+      },
+      { new: true }
+    );
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    res.json(message);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Mark all messages in conversation as read
+router.put('/read-all/:conversationId', async (req, res) => {
+  try {
+    const { receiverId } = req.body;
     await Message.updateMany(
       {
         conversationId: req.params.conversationId,
-        receiverId: userId,
-        read: false
+        receiverId,
+        isRead: false
       },
-      { read: true }
+      { 
+        $set: { 
+          isRead: true,
+          readAt: new Date()
+        } 
+      }
     );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    // Reset unread count
-    await Conversation.findByIdAndUpdate(req.params.conversationId, {
-      [`unreadCount.${userId}`]: 0
-    });
+// Edit message
+router.put('/:messageId', async (req, res) => {
+  try {
+    const { content } = req.body;
+    const message = await Message.findByIdAndUpdate(
+      req.params.messageId,
+      { 
+        $set: { 
+          content,
+          isEdited: true
+        } 
+      },
+      { new: true }
+    );
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    res.json(message);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
+// Delete message
+router.delete('/:messageId', async (req, res) => {
+  try {
+    const message = await Message.findByIdAndDelete(req.params.messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

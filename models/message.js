@@ -1,11 +1,6 @@
 const mongoose = require('mongoose');
 
 const MessageSchema = new mongoose.Schema({
-  conversationId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Conversation',
-    required: true
-  },
   senderId: {
     type: String,
     required: true
@@ -14,21 +9,45 @@ const MessageSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  text: {
+  content: {
     type: String,
     required: true
   },
-  mediaUrl: {
-    type: String
-  },
-  mediaType: {
+  type: {
     type: String,
-    enum: ['image', 'video', 'audio', null],
-    default: null
+    enum: ['text', 'image', 'video', 'audio', 'file', 'location'],
+    default: 'text'
   },
-  read: {
+  timestamp: {
+    type: Date,
+    default: Date.now
+  },
+  isEdited: {
     type: Boolean,
     default: false
+  },
+  isRead: {
+    type: Boolean,
+    default: false
+  },
+  readAt: {
+    type: Date,
+    default: null
+  },
+  replyTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Message',
+    default: null
+  },
+  metadata: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: new Map()
+  },
+  conversationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Conversation',
+    required: true
   }
 }, { timestamps: true });
 
