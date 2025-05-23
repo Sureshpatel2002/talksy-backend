@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/user');
+const Conversation = require('../models/conversation');
+const Message = require('../models/message');
 
 // Create or update user
 router.post('/update', async (req, res) => {
@@ -103,6 +105,52 @@ router.delete('/:uid', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all users except current user with their last message
+router.get('/all/:currentUserId', async (req, res) => {
+  try {
+    const { currentUserId } = req.params;
+
+    // Get all users except current user
+    const users = await User.find({ uid: { $ne: currentUserId } });
+
+    // Get conversations and last messages for each user
+    const usersWithLastMessage = await Promise.all(users.map(async (user) => {
+      // Find conversation between current user and this user
+      const conversation = await Conversation.findOne({
+        participants: { $all: [currentUserId, user.uid] }
+      }).populate({
+        path: 'lastMessage',
+        populate: {
+          path: 'replyTo'
+        }
+      });
+
+      return {
+        uid: user.uid,
+        name: user.name,
+        photoUrl: user.photoUrl,
+        email: user.email,
+        isOnline: user.isOnline,
+        lastSeen: user.lastSeen,
+        lastMessage: conversation?.lastMessage ? {
+          id: conversation.lastMessage._id,
+          content: conversation.lastMessage.content,
+          type: conversation.lastMessage.type,
+          timestamp: conversation.lastMessage.timestamp,
+          isRead: conversation.lastMessage.isRead,
+          senderId: conversation.lastMessage.senderId,
+          receiverId: conversation.lastMessage.receiverId
+        } : null
+      };
+    }));
+
+    res.json(usersWithLastMessage);
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 
