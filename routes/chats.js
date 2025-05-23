@@ -5,9 +5,13 @@ const User = require('../models/user');
 const Message = require('../models/message');
 
 // Get recent chats for a user
-router.get('/recent', async (req, res) => {
+router.get('/recent/:userId', async (req, res) => {
   try {
-    const { userId } = req.query;
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
 
     // Get all conversations for the user
     const conversations = await Conversation.find({
@@ -29,6 +33,13 @@ router.get('/recent', async (req, res) => {
       // Get the other participant's details
       const user = await User.findOne({ uid: otherParticipantId });
       
+      // Get unread count for this conversation
+      const unreadCount = await Message.countDocuments({
+        conversationId: conversation._id,
+        receiverId: userId,
+        isRead: false
+      });
+
       return {
         user: {
           uid: user.uid,
@@ -54,13 +65,15 @@ router.get('/recent', async (req, res) => {
           metadata: conversation.lastMessage.metadata,
           isRead: conversation.lastMessage.isRead,
           readAt: conversation.lastMessage.readAt
-        } : null
+        } : null,
+        unreadCount
       };
     }));
 
     res.json(recentChats);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error fetching recent chats:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 
