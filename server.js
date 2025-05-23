@@ -17,6 +17,9 @@ const server = http.createServer(app);
 // Initialize Socket.IO
 const io = initializeSocket(server);
 
+// Make io accessible to routes
+app.set('io', io);
+
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected'))
   .catch((err) => console.error('❌ MongoDB Error:', err));
@@ -27,6 +30,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/conversations', require('./routes/conversations'));
 app.use('/api/chats', require('./routes/chats'));
+app.use('/api/status', require('./routes/status'));
 
 // User Events
 io.on('connection', (socket) => {

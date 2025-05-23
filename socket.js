@@ -2,6 +2,7 @@ const socketIO = require('socket.io');
 const Message = require('./models/message');
 const Conversation = require('./models/conversation');
 const User = require('./models/user');
+const Status = require('./models/status');
 
 let io;
 
@@ -218,26 +219,50 @@ const initializeSocket = (server) => {
       }
     });
 
-    // Listen for recent chat updates
-    socket.on('recent:chat:update', (data) => {
-      const recentChat = RecentChat.fromJson(data);
-      // Update your recent chats list
-      const index = _recentChats.indexWhere((chat) => 
-        chat.user.uid == recentChat.user.uid
-      );
-      
-      if (index != -1) {
-        _recentChats[index] = recentChat;
-      } else {
-        _recentChats.insert(0, recentChat);
+    // Handle status events
+    socket.on('status:view', async ({ statusId, userId }) => {
+      try {
+        const status = await Status.findById(statusId);
+        if (!status) return;
+
+        // Add viewer if not already viewed
+        if (!status.viewers.some(viewer => viewer.userId === userId)) {
+          status.viewers.push({
+            userId,
+            viewedAt: new Date()
+          });
+          await status.save();
+
+          // Emit view event to status owner
+          const ownerSocketId = onlineUsers.get(status.userId);
+          if (ownerSocketId) {
+            io.to(ownerSocketId).emit('status:viewed', {
+              statusId,
+              userId
+            });
+          }
+        }
+      } catch (error) {
+        socket.emit('status:error', { error: error.message });
       }
-      
-      // Sort by last message timestamp
-      _recentChats.sort((a, b) => 
-        b.lastMessage.timestamp.compareTo(a.lastMessage.timestamp)
-      );
-      
-      notifyListeners();
+    });
+
+    socket.on('status:delete', async ({ statusId, userId }) => {
+      try {
+        const status = await Status.findOneAndDelete({
+          _id: statusId,
+          userId
+        });
+
+        if (status) {
+          io.emit('status:deleted', {
+            statusId,
+            userId
+          });
+        }
+      } catch (error) {
+        socket.emit('status:error', { error: error.message });
+      }
     });
   });
 
