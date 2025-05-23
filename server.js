@@ -31,6 +31,7 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/conversations', require('./routes/conversations'));
 app.use('/api/chats', require('./routes/chats'));
 app.use('/api/status', require('./routes/status'));
+app.use('/api/images', require('./routes/images'));
 
 // User Events
 io.on('connection', (socket) => {
