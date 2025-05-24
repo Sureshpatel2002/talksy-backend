@@ -46,7 +46,7 @@ const connectDB = async () => {
     const uri = process.env.MONGODB_URI;
     const uriParts = uri.split('@');
     const protocol = uriParts[0].split('://')[0];
-    const hostPart = uriParts[1]?.split('/')[0] || '';
+    const hostPart = uriParts[uriParts.length - 1]?.split('/')[0] || '';
     
     console.log('MongoDB URI Format Check:');
     console.log('Protocol:', protocol);
@@ -103,8 +103,8 @@ const connectDB = async () => {
     console.error('❌ MongoDB Connection Error:', err.message);
     console.error('Please check your MONGODB_URI format. It should look like:');
     console.error('mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority');
-    console.error('or');
-    console.error('mongodb://<username>:<password>@<host>:<port>/<database>');
+    console.error('Note: If your password contains special characters, they need to be URL encoded.');
+    console.error('For example: @ becomes %40, # becomes %23, etc.');
     return false;
   }
 };
