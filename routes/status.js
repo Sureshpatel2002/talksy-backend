@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Status = require('../models/status');
 const User = require('../models/user');
-const { upload, getSignedUrl } = require('../lib/s3Upload');
+const { upload } = require('../lib/s3Upload');
 
 // Create a new status with image/video
 router.post('/create', upload.single('media'), async (req, res) => {
