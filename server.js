@@ -6,6 +6,7 @@ const http = require('http');
 const { initializeSocket } = require('./socket');
 const multer = require('multer');
 const path = require('path');
+const net = require('net');
 
 // Debug environment variables
 console.log('Environment Check:');
@@ -40,15 +41,37 @@ const connectDB = async () => {
     if (!process.env.MONGODB_URI) {
       throw new Error('MONGODB_URI is not defined in environment variables');
     }
+
+    // Log URI format (without sensitive data)
+    const uri = process.env.MONGODB_URI;
+    const uriParts = uri.split('@');
+    const protocol = uriParts[0].split('://')[0];
+    const hostPart = uriParts[1]?.split('/')[0] || '';
+    
+    console.log('MongoDB URI Format Check:');
+    console.log('Protocol:', protocol);
+    console.log('Host part:', hostPart);
+    console.log('URI starts with mongodb:// or mongodb+srv://:', 
+      uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://'));
+    console.log('Contains @ symbol:', uri.includes('@'));
+    console.log('Contains hostname:', hostPart.includes('.'));
     
     // Validate MongoDB URI format
-    if (!process.env.MONGODB_URI.startsWith('mongodb://') && !process.env.MONGODB_URI.startsWith('mongodb+srv://')) {
+    if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
       throw new Error('Invalid MongoDB URI format. Must start with mongodb:// or mongodb+srv://');
+    }
+
+    if (!uri.includes('@')) {
+      throw new Error('Invalid MongoDB URI format. Must include username and password');
+    }
+
+    if (!hostPart.includes('.')) {
+      throw new Error('Invalid MongoDB URI format. Must include a valid hostname with domain');
     }
     
     console.log('Attempting to connect to MongoDB...');
     
-    await mongoose.connect(process.env.MONGODB_URI, {
+    await mongoose.connect(uri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
       serverSelectionTimeoutMS: 30000,
@@ -78,44 +101,80 @@ const connectDB = async () => {
     return true;
   } catch (err) {
     console.error('❌ MongoDB Connection Error:', err.message);
+    console.error('Please check your MONGODB_URI format. It should look like:');
+    console.error('mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority');
+    console.error('or');
+    console.error('mongodb://<username>:<password>@<host>:<port>/<database>');
     return false;
   }
 };
 
-// Initialize server
-const startServer = async () => {
-  try {
-    // Connect to MongoDB first
-    const isConnected = await connectDB();
-    if (!isConnected) {
-      console.error('Failed to connect to MongoDB. Exiting...');
-      process.exit(1);
+// Function to find an available port
+async function findAvailablePort(startPort) {
+    // Ensure startPort is a number and within valid range
+    let port = parseInt(startPort, 10);
+    if (isNaN(port) || port < 0 || port > 65535) {
+        port = 3000; // Default to 3000 if invalid
     }
 
-    // Routes
-    app.get('/', (req, res) => res.send('API is live'));
-    app.use('/api/users', require('./routes/users'));
-    app.use('/api/messages', require('./routes/messages'));
-    app.use('/api/conversations', require('./routes/conversations'));
-    app.use('/api/chats', require('./routes/chats'));
-    app.use('/api/status', require('./routes/status'));
-    app.use('/api/images', require('./routes/images'));
-    app.use('/api/test', require('./routes/test-upload'));
-
-    // Health check endpoint for Render
-    app.get('/api/health', (req, res) => {
-      res.status(200).json({ status: 'ok' });
+    return new Promise((resolve, reject) => {
+        const server = net.createServer();
+        server.unref();
+        
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                // Port is in use, try the next one (max 10 attempts)
+                if (port < 3010) {
+                    resolve(findAvailablePort(port + 1));
+                } else {
+                    reject(new Error('No available ports found between 3000-3010'));
+                }
+            } else {
+                reject(err);
+            }
+        });
+        
+        server.listen(port, () => {
+            server.close(() => {
+                resolve(port);
+            });
+        });
     });
+}
 
-    // Start the server
-    server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-};
+// Start server function
+async function startServer() {
+    try {
+        // Connect to MongoDB first
+        const isConnected = await connectDB();
+        if (!isConnected) {
+            console.error('Failed to connect to MongoDB. Exiting...');
+            process.exit(1);
+        }
+
+        // Register routes
+        app.get('/', (req, res) => res.send('API is live'));
+        app.use('/api/health', require('./routes/health'));
+        app.use('/api/users', require('./routes/users'));
+        app.use('/api/messages', require('./routes/messages'));
+        app.use('/api/conversations', require('./routes/conversations'));
+        app.use('/api/chats', require('./routes/chats'));
+        app.use('/api/status', require('./routes/status'));
+        app.use('/api/images', require('./routes/images'));
+        app.use('/api/test', require('./routes/test-upload'));
+
+        const port = await findAvailablePort(process.env.PORT || 3000);
+        console.log(`Attempting to start server on port ${port}...`);
+        
+        server.listen(port, () => {
+            console.log(`✅ Server is running on port ${port}`);
+            console.log(`Health check available at: http://localhost:${port}/api/health`);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
 
 // Start the server
 startServer();
