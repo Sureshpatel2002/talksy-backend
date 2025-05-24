@@ -12,7 +12,12 @@ const StatusSchema = new mongoose.Schema({
   },
   networkUrl: {
     type: String,
-    required: true
+    required: true,
+    get: function(url) {
+      // Ensure the URL is absolute
+      if (url.startsWith('http')) return url;
+      return `${process.env.BASE_URL || 'https://talksy-backend-z1ta.onrender.com'}${url}`;
+    }
   },
   mediaType: {
     type: String,
@@ -28,7 +33,7 @@ const StatusSchema = new mongoose.Schema({
     type: String, // Array of user IDs who viewed the status
     ref: 'User'
   }]
-}, { timestamps: true });
+}, { timestamps: true, toJSON: { getters: true } });
 
 // Index for automatic deletion of expired statuses
 StatusSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
