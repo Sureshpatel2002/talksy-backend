@@ -4,6 +4,11 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const User = require('../models/user');
+const Status = require('../models/status');
+const auth = require('../middleware/auth');
+
+// Get the base URL from environment variable or use default
+const BASE_URL = process.env.BASE_URL || 'https://your-app.onrender.com';
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, '../public/uploads');
@@ -25,13 +30,13 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 10 * 1024 * 1024 // 10MB limit for videos
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
       cb(null, true);
     } else {
-      cb(new Error('Not an image! Please upload an image.'), false);
+      cb(new Error('Only images and videos are allowed!'), false);
     }
   }
 });
@@ -47,11 +52,12 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
 
     // Create public URL for the image
     const imageUrl = `/uploads/${req.file.filename}`;
+    const networkUrl = `${BASE_URL}${imageUrl}`;
 
     // Update user's profile picture
     const updatedUser = await User.findOneAndUpdate(
       { uid: userId },
-      { $set: { photoUrl: imageUrl } },
+      { $set: { photoUrl: networkUrl } },
       { new: true }
     );
 
@@ -61,10 +67,104 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
 
     res.json({
       message: 'Profile image uploaded successfully',
-      photoUrl: imageUrl
+      photoUrl: networkUrl
     });
   } catch (err) {
     console.error('Error uploading image:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Upload status (image or video)
+router.post('/status/:userId', auth, upload.single('media'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check if the authenticated user is the same as the requested user
+    if (req.user.uid !== userId) {
+      return res.status(403).json({ message: 'Not authorized to update this status' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Determine media type
+    const mediaType = req.file.mimetype.startsWith('image/') ? 'image' : 'video';
+    
+    // Create URLs for the media
+    const mediaUrl = `/uploads/${req.file.filename}`;
+    const networkUrl = `${BASE_URL}${mediaUrl}`;
+
+    // Create new status
+    const status = new Status({
+      userId: userId,
+      mediaUrl: mediaUrl,
+      networkUrl: networkUrl,
+      mediaType: mediaType
+    });
+
+    await status.save();
+
+    res.json({
+      message: 'Status uploaded successfully',
+      status: {
+        id: status._id,
+        mediaUrl: networkUrl,
+        mediaType: mediaType,
+        createdAt: status.createdAt
+      }
+    });
+  } catch (err) {
+    console.error('Error uploading status:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get all statuses for a user
+router.get('/status/:userId', auth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get all statuses from the last 24 hours
+    const statuses = await Status.find({
+      userId: userId,
+      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    }).sort({ createdAt: -1 });
+
+    // Check if the current user has viewed these statuses
+    const statusesWithViewInfo = statuses.map(status => ({
+      ...status.toObject(),
+      mediaUrl: status.networkUrl, // Use network URL instead of local path
+      viewed: status.viewedBy.includes(req.user.uid)
+    }));
+
+    res.json({ statuses: statusesWithViewInfo });
+  } catch (err) {
+    console.error('Error getting statuses:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Mark status as viewed
+router.post('/status/:statusId/view', auth, async (req, res) => {
+  try {
+    const { statusId } = req.params;
+    
+    const status = await Status.findById(statusId);
+    if (!status) {
+      return res.status(404).json({ message: 'Status not found' });
+    }
+
+    // Add viewer if not already viewed
+    if (!status.viewedBy.includes(req.user.uid)) {
+      status.viewedBy.push(req.user.uid);
+      await status.save();
+    }
+
+    res.json({ message: 'Status marked as viewed' });
+  } catch (err) {
+    console.error('Error marking status as viewed:', err);
     res.status(500).json({ message: err.message });
   }
 });
