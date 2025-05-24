@@ -3,7 +3,10 @@
     "version": "1.0.0",
     "main": "server.js",
     "scripts": {
-        "start": "node server.js"
+        "prestart": "npm run build",
+        "start": "node server.js",
+        "build": "node build.js",
+        "dev": "nodemon server.js"
     },
     "dependencies": {
         "@aws-sdk/client-s3": "^3.817.0",
