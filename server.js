@@ -13,7 +13,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serve static files from the public directory
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 
@@ -38,6 +38,12 @@ app.use('/api/conversations', require('./routes/conversations'));
 app.use('/api/chats', require('./routes/chats'));
 app.use('/api/status', require('./routes/status'));
 app.use('/api/images', require('./routes/images'));
+app.use('/api/test', require('./routes/test-upload'));
+
+// Health check endpoint for Render
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+});
 
 // User Events
 io.on('connection', (socket) => {

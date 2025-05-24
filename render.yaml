@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: talksy-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: eu-north-1
+      - key: AWS_BUCKET_NAME
+        value: talksy-media-bucket
+      - key: JWT_SECRET
+        sync: false
+      - key: PORT
+        value: 3000
+    healthCheckPath: /api/health
+    autoDeploy: true 

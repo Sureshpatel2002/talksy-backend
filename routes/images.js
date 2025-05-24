@@ -1,45 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { upload, getSignedUrl } = require('../lib/s3Upload');
 const User = require('../models/user');
 const Status = require('../models/status');
 const auth = require('../middleware/auth');
-
-// Get the base URL from environment variable or use default
-const BASE_URL = process.env.BASE_URL || 'https://your-app.onrender.com';
-
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, '../public/uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Configure multer for disk storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit for videos
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images and videos are allowed!'), false);
-    }
-  }
-});
 
 // Upload profile image
 router.post('/upload/:userId', upload.single('image'), async (req, res) => {
@@ -50,14 +14,13 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Create public URL for the image
-    const imageUrl = `/uploads/${req.file.filename}`;
-    const networkUrl = `${BASE_URL}${imageUrl}`;
+    // Get the S3 file URL
+    const imageUrl = req.file.location;
 
     // Update user's profile picture
     const updatedUser = await User.findOneAndUpdate(
       { uid: userId },
-      { $set: { photoUrl: networkUrl } },
+      { $set: { photoUrl: imageUrl } },
       { new: true }
     );
 
@@ -67,7 +30,7 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
 
     res.json({
       message: 'Profile image uploaded successfully',
-      photoUrl: networkUrl
+      photoUrl: imageUrl
     });
   } catch (err) {
     console.error('Error uploading image:', err);
@@ -75,12 +38,11 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
   }
 });
 
-// Upload status (image or video)
+// Upload status
 router.post('/status/:userId', auth, upload.single('media'), async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Check if the authenticated user is the same as the requested user
     if (req.user.uid !== userId) {
       return res.status(403).json({ message: 'Not authorized to update this status' });
     }
@@ -89,18 +51,16 @@ router.post('/status/:userId', auth, upload.single('media'), async (req, res) =>
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Determine media type
-    const mediaType = req.file.mimetype.startsWith('image/') ? 'image' : 'video';
+    const file = req.file;
+    const mediaType = file.mimetype.startsWith('image/') ? 'image' : 'video';
     
-    // Create URLs for the media
-    const mediaUrl = `/uploads/${req.file.filename}`;
-    const networkUrl = `${BASE_URL}${mediaUrl}`;
+    // Get the S3 file URL
+    const mediaUrl = file.location;
 
-    // Create new status
+    // Create status in database
     const status = new Status({
       userId: userId,
       mediaUrl: mediaUrl,
-      networkUrl: networkUrl,
       mediaType: mediaType
     });
 
@@ -110,7 +70,7 @@ router.post('/status/:userId', auth, upload.single('media'), async (req, res) =>
       message: 'Status uploaded successfully',
       status: {
         id: status._id,
-        mediaUrl: networkUrl,
+        mediaUrl: mediaUrl,
         mediaType: mediaType,
         createdAt: status.createdAt
       }
@@ -135,7 +95,6 @@ router.get('/status/:userId', auth, async (req, res) => {
     // Check if the current user has viewed these statuses
     const statusesWithViewInfo = statuses.map(status => ({
       ...status.toObject(),
-      mediaUrl: status.networkUrl, // Use network URL instead of local path
       viewed: status.viewedBy.includes(req.user.uid)
     }));
 

@@ -2,24 +2,9 @@ const express = require('express');
 const router = express.Router();
 const Status = require('../models/status');
 const User = require('../models/user');
-const multer = require('multer');
+const { upload, getSignedUrl } = require('../lib/s3Upload');
 
-// Configure multer for memory storage
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Not an image! Please upload an image.'), false);
-    }
-  }
-});
-
-// Create a new status with image
+// Create a new status with image/video
 router.post('/create', upload.single('media'), async (req, res) => {
   try {
     const { userId, caption, type } = req.body;
@@ -28,8 +13,8 @@ router.post('/create', upload.single('media'), async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Convert image to base64
-    const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    // Get the S3 file URL
+    const mediaUrl = req.file.location;
 
     // Check if user already has a status document
     let statusDoc = await Status.findOne({ userId });
@@ -37,7 +22,7 @@ router.post('/create', upload.single('media'), async (req, res) => {
     if (statusDoc) {
       // Add new status to existing list
       statusDoc.statuses.push({
-        mediaUrl: base64Image,
+        mediaUrl,
         type: type || 'image',
         caption: caption || ''
       });
@@ -46,7 +31,7 @@ router.post('/create', upload.single('media'), async (req, res) => {
       statusDoc = new Status({
         userId,
         statuses: [{
-          mediaUrl: base64Image,
+          mediaUrl,
           type: type || 'image',
           caption: caption || ''
         }]
