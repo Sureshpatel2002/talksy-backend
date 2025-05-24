@@ -11,11 +11,21 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
     const { userId } = req.params;
     
     if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+      return res.status(400).json({ 
+        message: 'No file uploaded',
+        error: 'FILE_MISSING'
+      });
     }
 
     // Get the S3 file URL
     const imageUrl = req.file.location;
+
+    if (!imageUrl) {
+      return res.status(500).json({ 
+        message: 'Failed to get S3 URL',
+        error: 'S3_URL_MISSING'
+      });
+    }
 
     // Update user's profile picture
     const updatedUser = await User.findOneAndUpdate(
@@ -25,7 +35,10 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
     );
 
     if (!updatedUser) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
     }
 
     res.json({
@@ -34,7 +47,29 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
     });
   } catch (err) {
     console.error('Error uploading image:', err);
-    res.status(500).json({ message: err.message });
+    
+    // Handle specific AWS errors
+    if (err.name === 'SignatureDoesNotMatch') {
+      return res.status(500).json({ 
+        message: 'AWS credentials error',
+        error: 'AWS_CREDENTIALS_ERROR',
+        details: err.message
+      });
+    }
+    
+    if (err.name === 'NoSuchBucket') {
+      return res.status(500).json({ 
+        message: 'AWS bucket not found',
+        error: 'AWS_BUCKET_ERROR',
+        details: err.message
+      });
+    }
+
+    res.status(500).json({ 
+      message: err.message || 'Internal server error',
+      error: 'UPLOAD_ERROR',
+      details: err.stack
+    });
   }
 });
 
