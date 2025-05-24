@@ -42,8 +42,8 @@ const connectDB = async () => {
     }
     
     // Validate MongoDB URI format
-    if (!process.env.MONGODB_URI.startsWith('mongodb+srv://')) {
-      throw new Error('Invalid MongoDB URI format. Must start with mongodb+srv://');
+    if (!process.env.MONGODB_URI.startsWith('mongodb://') && !process.env.MONGODB_URI.startsWith('mongodb+srv://')) {
+      throw new Error('Invalid MongoDB URI format. Must start with mongodb:// or mongodb+srv://');
     }
     
     console.log('Attempting to connect to MongoDB...');
@@ -51,14 +51,14 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 30000, // Increased timeout
+      serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000,
       maxPoolSize: 10,
       minPoolSize: 5,
       retryWrites: true,
       w: 'majority',
-      connectTimeoutMS: 30000, // Added connection timeout
-      heartbeatFrequencyMS: 10000 // Added heartbeat frequency
+      connectTimeoutMS: 30000,
+      heartbeatFrequencyMS: 10000
     });
     
     // Handle connection events
