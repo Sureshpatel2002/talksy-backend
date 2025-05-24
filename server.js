@@ -7,6 +7,14 @@ const { initializeSocket } = require('./socket');
 const multer = require('multer');
 const path = require('path');
 
+// Debug environment variables
+console.log('Environment Check:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
+console.log('AWS_ACCESS_KEY_ID exists:', !!process.env.AWS_ACCESS_KEY_ID);
+console.log('AWS_SECRET_ACCESS_KEY exists:', !!process.env.AWS_SECRET_ACCESS_KEY);
+console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -26,24 +34,91 @@ const io = initializeSocket(server);
 // Make io accessible to routes
 app.set('io', io);
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch((err) => console.error('❌ MongoDB Error:', err));
+// MongoDB Connection with options
+const connectDB = async () => {
+  try {
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is not defined in environment variables');
+    }
+    
+    // Validate MongoDB URI format
+    if (!process.env.MONGODB_URI.startsWith('mongodb+srv://')) {
+      throw new Error('Invalid MongoDB URI format. Must start with mongodb+srv://');
+    }
+    
+    console.log('Attempting to connect to MongoDB...');
+    
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 30000, // Increased timeout
+      socketTimeoutMS: 45000,
+      maxPoolSize: 10,
+      minPoolSize: 5,
+      retryWrites: true,
+      w: 'majority',
+      connectTimeoutMS: 30000, // Added connection timeout
+      heartbeatFrequencyMS: 10000 // Added heartbeat frequency
+    });
+    
+    // Handle connection events
+    mongoose.connection.on('error', (err) => {
+      console.error('MongoDB connection error:', err);
+    });
 
-// Routes
-app.get('/', (req, res) => res.send('API is live'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/messages', require('./routes/messages'));
-app.use('/api/conversations', require('./routes/conversations'));
-app.use('/api/chats', require('./routes/chats'));
-app.use('/api/status', require('./routes/status'));
-app.use('/api/images', require('./routes/images'));
-app.use('/api/test', require('./routes/test-upload'));
+    mongoose.connection.on('disconnected', () => {
+      console.log('MongoDB disconnected');
+    });
 
-// Health check endpoint for Render
-app.get('/api/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
-});
+    mongoose.connection.on('reconnected', () => {
+      console.log('MongoDB reconnected');
+    });
+
+    console.log('✅ MongoDB Connected');
+    return true;
+  } catch (err) {
+    console.error('❌ MongoDB Connection Error:', err.message);
+    return false;
+  }
+};
+
+// Initialize server
+const startServer = async () => {
+  try {
+    // Connect to MongoDB first
+    const isConnected = await connectDB();
+    if (!isConnected) {
+      console.error('Failed to connect to MongoDB. Exiting...');
+      process.exit(1);
+    }
+
+    // Routes
+    app.get('/', (req, res) => res.send('API is live'));
+    app.use('/api/users', require('./routes/users'));
+    app.use('/api/messages', require('./routes/messages'));
+    app.use('/api/conversations', require('./routes/conversations'));
+    app.use('/api/chats', require('./routes/chats'));
+    app.use('/api/status', require('./routes/status'));
+    app.use('/api/images', require('./routes/images'));
+    app.use('/api/test', require('./routes/test-upload'));
+
+    // Health check endpoint for Render
+    app.get('/api/health', (req, res) => {
+      res.status(200).json({ status: 'ok' });
+    });
+
+    // Start the server
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the server
+startServer();
 
 // User Events
 io.on('connection', (socket) => {
@@ -120,8 +195,4 @@ app.use((err, req, res, next) => {
     error: 'Something went wrong!',
     message: err.message
   });
-});
-
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
 });
