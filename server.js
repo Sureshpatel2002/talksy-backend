@@ -5,11 +5,15 @@ const cors = require('cors');
 const http = require('http');
 const { initializeSocket } = require('./socket');
 const multer = require('multer');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Serve static files from the public directory
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 const PORT = process.env.PORT || 3000;
 

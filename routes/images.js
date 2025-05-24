@@ -1,11 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const User = require('../models/user');
 
-// Configure multer for memory storage
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, '../public/uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for disk storage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: storage,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   },
@@ -27,13 +45,13 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Convert image to base64
-    const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    // Create public URL for the image
+    const imageUrl = `/uploads/${req.file.filename}`;
 
     // Update user's profile picture
     const updatedUser = await User.findOneAndUpdate(
       { uid: userId },
-      { $set: { photoUrl: base64Image } },
+      { $set: { photoUrl: imageUrl } },
       { new: true }
     );
 
@@ -43,7 +61,7 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
 
     res.json({
       message: 'Profile image uploaded successfully',
-      photoUrl: base64Image
+      photoUrl: imageUrl
     });
   } catch (err) {
     console.error('Error uploading image:', err);
