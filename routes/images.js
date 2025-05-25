@@ -17,27 +17,44 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
       });
     }
 
+    console.log('File upload details:', {
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      originalname: req.file.originalname,
+      location: req.file.location
+    });
+
     // Get the S3 file URL
     const imageUrl = req.file.location;
 
     if (!imageUrl) {
       return res.status(500).json({ 
         message: 'Failed to get S3 URL',
-        error: 'S3_URL_MISSING'
+        error: 'S3_URL_MISSING',
+        details: {
+          file: req.file
+        }
       });
     }
 
-    // Update user's profile picture
-    const updatedUser = await User.findOneAndUpdate(
+    // Update user's profile picture with timeout
+    const updatePromise = User.findOneAndUpdate(
       { uid: userId },
       { $set: { photoUrl: imageUrl } },
       { new: true }
     );
 
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database update timed out')), 10000);
+    });
+
+    const updatedUser = await Promise.race([updatePromise, timeoutPromise]);
+
     if (!updatedUser) {
       return res.status(404).json({ 
         message: 'User not found',
-        error: 'USER_NOT_FOUND'
+        error: 'USER_NOT_FOUND',
+        userId
       });
     }
 
@@ -46,14 +63,23 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
       photoUrl: imageUrl
     });
   } catch (err) {
-    console.error('Error uploading image:', err);
+    console.error('Error uploading image:', {
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+      code: err.code
+    });
     
     // Handle specific AWS errors
     if (err.name === 'SignatureDoesNotMatch') {
       return res.status(500).json({ 
         message: 'AWS credentials error',
         error: 'AWS_CREDENTIALS_ERROR',
-        details: err.message
+        details: {
+          name: err.name,
+          message: err.message,
+          code: err.code
+        }
       });
     }
     
@@ -61,14 +87,30 @@ router.post('/upload/:userId', upload.single('image'), async (req, res) => {
       return res.status(500).json({ 
         message: 'AWS bucket not found',
         error: 'AWS_BUCKET_ERROR',
-        details: err.message
+        details: {
+          name: err.name,
+          message: err.message,
+          code: err.code
+        }
+      });
+    }
+
+    if (err.message === 'Database update timed out') {
+      return res.status(504).json({
+        message: 'Request timed out',
+        error: 'TIMEOUT_ERROR',
+        details: 'Database update took too long'
       });
     }
 
     res.status(500).json({ 
       message: err.message || 'Internal server error',
       error: 'UPLOAD_ERROR',
-      details: err.stack
+      details: {
+        name: err.name,
+        message: err.message,
+        code: err.code
+      }
     });
   }
 });
