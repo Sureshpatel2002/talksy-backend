@@ -1,8 +1,9 @@
 import express from 'express';
+import Chat from '../models/chat.js';
+import User from '../models/user.js';
+import { getIO } from '../socket.js';
+
 const router = express.Router();
-const Chat = require('../models/chat');
-const User = require('../models/user');
-const { io } = require('../socket');
 
 // Create a new chat (direct or group)
 router.post('/', async (req, res) => {
@@ -54,7 +55,7 @@ router.post('/', async (req, res) => {
 
         // Notify participants about new chat
         participants.forEach(participantId => {
-            io.to(participantId).emit('chat:new', {
+            getIO().to(participantId).emit('chat:new', {
                 chatId: chat._id,
                 type: chat.type,
                 name: chat.name,
@@ -112,7 +113,7 @@ router.post('/:chatId/messages', async (req, res) => {
         // Notify participants about new message
         chat.participants.forEach(participantId => {
             if (participantId !== senderId) {
-                io.to(participantId).emit('chat:message', {
+                getIO().to(participantId).emit('chat:message', {
                     chatId,
                     message
                 });
@@ -262,7 +263,7 @@ router.put('/:chatId', async (req, res) => {
 
         // Notify participants about chat update
         chat.participants.forEach(participantId => {
-            io.to(participantId).emit('chat:update', {
+            getIO().to(participantId).emit('chat:update', {
                 chatId,
                 updates: {
                     name: chat.name,
@@ -308,7 +309,7 @@ router.post('/:chatId/messages/:messageId/reactions', async (req, res) => {
         // Notify participants about reaction
         chat.participants.forEach(participantId => {
             if (participantId !== userId) {
-                io.to(participantId).emit('chat:reaction', {
+                getIO().to(participantId).emit('chat:reaction', {
                     chatId,
                     messageId,
                     reaction: {
@@ -355,7 +356,7 @@ router.delete('/:chatId/messages/:messageId/reactions', async (req, res) => {
         // Notify participants about reaction removal
         chat.participants.forEach(participantId => {
             if (participantId !== userId) {
-                io.to(participantId).emit('chat:reaction:removed', {
+                getIO().to(participantId).emit('chat:reaction:removed', {
                     chatId,
                     messageId,
                     userId
@@ -399,7 +400,7 @@ router.put('/:chatId/messages/:messageId', async (req, res) => {
         // Notify participants about message edit
         chat.participants.forEach(participantId => {
             if (participantId !== userId) {
-                io.to(participantId).emit('chat:message:edited', {
+                getIO().to(participantId).emit('chat:message:edited', {
                     chatId,
                     messageId,
                     content,
@@ -444,7 +445,7 @@ router.delete('/:chatId/messages/:messageId', async (req, res) => {
         // Notify participants about message deletion
         chat.participants.forEach(participantId => {
             if (participantId !== userId) {
-                io.to(participantId).emit('chat:message:deleted', {
+                getIO().to(participantId).emit('chat:message:deleted', {
                     chatId,
                     messageId
                 });

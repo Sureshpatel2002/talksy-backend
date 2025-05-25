@@ -1,7 +1,8 @@
 import express from 'express';
+import User from '../models/user.js';
+import auth from '../middleware/auth.js';
+
 const router = express.Router();
-const User = require('../models/user');
-const auth = require('../middleware/auth');
 
 // Get notification analytics
 router.get('/:userId', async (req, res) => {

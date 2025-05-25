@@ -1,8 +1,9 @@
-const express = require('express');
+import express from 'express';
+import Conversation from '../models/conversation.js';
+import User from '../models/user.js';
+import Message from '../models/message.js';
+
 const router = express.Router();
-const Conversation = require('../models/conversation');
-const User = require('../models/user');
-const Message = require('../models/message');
 
 // Get recent chats for a user
 router.get('/recent/:userId', async (req, res) => {
@@ -77,4 +78,4 @@ router.get('/recent/:userId', async (req, res) => {
   }
 });
 
-module.exports = router; 
+export default router; 

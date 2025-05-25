@@ -1,8 +1,9 @@
 import express from 'express';
+import Status from '../models/status.js';
+import User from '../models/user.js';
+import { upload } from '../lib/s3Upload.js';
+
 const router = express.Router();
-const Status = require('../models/status');
-const User = require('../models/user');
-const { upload } = require('../lib/s3Upload');
 
 // Create a new status with image/video
 router.post('/create', upload.single('media'), async (req, res) => {

@@ -1,7 +1,8 @@
 import express from 'express';
+import Conversation from '../models/conversation.js';
+import Message from '../models/message.js';
+
 const router = express.Router();
-const Conversation = require('../models/conversation');
-const Message = require('../models/message');
 
 // Create or get conversation between two users
 router.post('/get', async (req, res) => {

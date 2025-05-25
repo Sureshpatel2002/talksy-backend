@@ -1,9 +1,10 @@
-const express = require('express');
+import express from 'express';
+import { upload, s3Client, testS3Connection } from '../lib/s3Upload.js';
+import User from '../models/user.js';
+import Status from '../models/status.js';
+import auth from '../middleware/auth.js';
+
 const router = express.Router();
-const { upload, s3Client, testS3Connection } = require('../lib/s3Upload');
-const User = require('../models/user');
-const Status = require('../models/status');
-const auth = require('../middleware/auth');
 
 // Middleware to check S3 connection before upload
 const checkS3Connection = async (req, res, next) => {
@@ -233,4 +234,4 @@ router.get('/:userId', async (req, res) => {
     }
 });
 
-module.exports = router; 
+export default router; 

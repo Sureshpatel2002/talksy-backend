@@ -1,7 +1,8 @@
 import express from 'express';
+import Message from '../models/message.js';
+import Conversation from '../models/conversation.js';
+
 const router = express.Router();
-const Message = require('../models/message');
-const Conversation = require('../models/conversation');
 
 // Get messages for a conversation
 router.get('/:conversationId', async (req, res) => {
