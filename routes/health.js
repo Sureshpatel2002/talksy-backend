@@ -1,8 +1,9 @@
-const express = require('express');
+import express from 'express';
+import mongoose from 'mongoose';
+import { S3Client, ListBucketsCommand } from '@aws-sdk/client-s3';
+import config from '../config.js';
+
 const router = express.Router();
-const mongoose = require('mongoose');
-const { S3Client, ListBucketsCommand } = require('@aws-sdk/client-s3');
-const config = require('../config');
 
 // Health check endpoint
 router.get('/', async (req, res) => {
@@ -80,4 +81,4 @@ router.get('/', async (req, res) => {
     }
 });
 
-module.exports = router; 
+export default router; 

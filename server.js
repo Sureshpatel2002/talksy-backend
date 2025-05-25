@@ -1,12 +1,32 @@
-require('dotenv').config();
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const http = require('http');
-const { initializeSocket } = require('./socket');
-const multer = require('multer');
-const path = require('path');
-const net = require('net');
+import dotenv from 'dotenv';
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import http from 'http';
+import { initializeSocket } from './socket.js';
+import multer from 'multer';
+import path from 'path';
+import net from 'net';
+import { fileURLToPath } from 'url';
+import healthRoutes from './routes/health.js';
+import userRoutes from './routes/users.js';
+import messageRoutes from './routes/messages.js';
+import conversationRoutes from './routes/conversations.js';
+import chatRoutes from './routes/chat.js';
+import statusRoutes from './routes/status.js';
+import mediaRoutes from './routes/media.js';
+import testUploadRoutes from './routes/test-upload.js';
+import authRoutes from './routes/auth.js';
+import notificationRoutes from './routes/notifications.js';
+import notificationActionRoutes from './routes/notification-actions.js';
+import notificationAnalyticsRoutes from './routes/notification-analytics.js';
+
+// Initialize dotenv
+dotenv.config();
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Debug environment variables
 console.log('Environment Check:');
@@ -156,18 +176,18 @@ async function findAvailablePort(startPort) {
 
 // Register routes
 app.get('/', (req, res) => res.send('API is live'));
-app.use('/api/health', require('./routes/health'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/messages', require('./routes/messages'));
-app.use('/api/conversations', require('./routes/conversations'));
-app.use('/api/chat', require('./routes/chat'));
-app.use('/api/status', require('./routes/status'));
-app.use('/api/media', require('./routes/media'));
-app.use('/api/test', require('./routes/test-upload'));
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/notifications', require('./routes/notifications'));
-app.use('/api/notification-actions', require('./routes/notification-actions'));
-app.use('/api/notification-analytics', require('./routes/notification-analytics'));
+app.use('/api/health', healthRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/conversations', conversationRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/status', statusRoutes);
+app.use('/api/media', mediaRoutes);
+app.use('/api/test', testUploadRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/notification-actions', notificationActionRoutes);
+app.use('/api/notification-analytics', notificationAnalyticsRoutes);
 
 const port = await findAvailablePort(process.env.PORT || 3000);
 console.log(`Attempting to start server on port ${port}...`);
