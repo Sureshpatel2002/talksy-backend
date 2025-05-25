@@ -1,59 +1,59 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 const Message = require('../models/message');
 const Conversation = require('../models/conversation');
 
-// Send a message
-router.post('/send', async (req, res) => {
-  try {
-    const { 
-      conversationId, 
-      senderId, 
-      receiverId, 
-      content, 
-      type, 
-      replyTo, 
-      metadata 
-    } = req.body;
-    
-    // Create new message
-    const newMessage = new Message({
-      conversationId,
-      senderId,
-      receiverId,
-      content,
-      type,
-      replyTo,
-      metadata,
-      timestamp: new Date()
-    });
-
-    // Save message
-    const savedMessage = await newMessage.save();
-
-    // Update conversation's last message
-    await Conversation.findByIdAndUpdate(conversationId, {
-      lastMessage: savedMessage._id
-    });
-
-    res.json(savedMessage);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+// Get messages for a conversation
+router.get('/:conversationId', async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        // TODO: Add actual message fetching logic
+        res.json({
+            message: 'Get messages endpoint',
+            conversationId
+        });
+    } catch (error) {
+        console.error('Get messages error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
 });
 
-// Get messages for a conversation
-router.get('/conversation/:conversationId', async (req, res) => {
-  try {
-    const messages = await Message.find({
-      conversationId: req.params.conversationId
-    })
-    .populate('replyTo')
-    .sort({ timestamp: 1 });
-    res.json(messages);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+// Send a message
+router.post('/', async (req, res) => {
+    try {
+        const { conversationId, content, type } = req.body;
+        // TODO: Add actual message sending logic
+        res.status(201).json({
+            message: 'Message sent endpoint',
+            conversationId,
+            content,
+            type
+        });
+    } catch (error) {
+        console.error('Send message error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Delete a message
+router.delete('/:messageId', async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        // TODO: Add actual message deletion logic
+        res.json({
+            message: 'Message deletion endpoint',
+            messageId
+        });
+    } catch (error) {
+        console.error('Delete message error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
 });
 
 // Mark message as read
@@ -137,4 +137,4 @@ router.delete('/:messageId', async (req, res) => {
   }
 });
 
-module.exports = router; 
+export default router; 

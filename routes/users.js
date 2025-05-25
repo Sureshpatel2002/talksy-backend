@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 const User = require('../models/user');
 const Conversation = require('../models/conversation');
@@ -335,4 +335,57 @@ router.get('/search/phone', async (req, res) => {
     }
 });
 
-module.exports = router;
+// Get user profile
+router.get('/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        // TODO: Add actual user fetching logic
+        res.json({
+            message: 'User profile endpoint',
+            userId
+        });
+    } catch (error) {
+        console.error('Get user error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Update user profile
+router.put('/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const updates = req.body;
+        // TODO: Add actual user update logic
+        res.json({
+            message: 'User update endpoint',
+            userId,
+            updates
+        });
+    } catch (error) {
+        console.error('Update user error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Delete user
+router.delete('/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        // TODO: Add actual user deletion logic
+        res.json({
+            message: 'User deletion endpoint',
+            userId
+        });
+    } catch (error) {
+        console.error('Delete user error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+export default router;

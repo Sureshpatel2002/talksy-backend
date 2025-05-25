@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 const Status = require('../models/status');
 const User = require('../models/user');
@@ -187,4 +187,58 @@ router.delete('/:statusId', async (req, res) => {
   }
 });
 
-module.exports = router; 
+// Get user's status
+router.get('/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        // TODO: Add actual status fetching logic
+        res.json({
+            message: 'Get status endpoint',
+            userId
+        });
+    } catch (error) {
+        console.error('Get status error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Create new status
+router.post('/', async (req, res) => {
+    try {
+        const { userId, content, type, mediaUrl } = req.body;
+        // TODO: Add actual status creation logic
+        res.status(201).json({
+            message: 'Create status endpoint',
+            userId,
+            content,
+            type,
+            mediaUrl
+        });
+    } catch (error) {
+        console.error('Create status error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Delete status
+router.delete('/:statusId', async (req, res) => {
+    try {
+        const { statusId } = req.params;
+        // TODO: Add actual status deletion logic
+        res.json({
+            message: 'Delete status endpoint',
+            statusId
+        });
+    } catch (error) {
+        console.error('Delete status error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+export default router; 

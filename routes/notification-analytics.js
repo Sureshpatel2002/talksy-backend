@@ -1,7 +1,43 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 const User = require('../models/user');
 const auth = require('../middleware/auth');
+
+// Get notification analytics
+router.get('/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        // TODO: Add actual notification analytics fetching logic
+        res.json({
+            message: 'Get notification analytics endpoint',
+            userId
+        });
+    } catch (error) {
+        console.error('Get notification analytics error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Track notification event
+router.post('/track', async (req, res) => {
+    try {
+        const { userId, eventType, data } = req.body;
+        // TODO: Add actual notification event tracking logic
+        res.status(201).json({
+            message: 'Track notification event endpoint',
+            userId,
+            eventType,
+            data
+        });
+    } catch (error) {
+        console.error('Track notification event error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
 
 // Get notification analytics
 router.get('/', auth, async (req, res) => {
@@ -99,4 +135,4 @@ function getWeekNumber(date) {
     return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
-module.exports = router; 
+export default router; 

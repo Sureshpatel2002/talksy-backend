@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 const { upload, s3Client, testS3Connection, getBucketUrl } = require('../lib/s3Upload');
 const User = require('../models/user');
@@ -738,4 +738,53 @@ router.get('/status/:userId', auth, async (req, res) => {
     }
 });
 
-module.exports = router; 
+// Upload media
+router.post('/upload', async (req, res) => {
+    try {
+        // TODO: Add actual media upload logic
+        res.status(201).json({
+            message: 'Media upload endpoint'
+        });
+    } catch (error) {
+        console.error('Media upload error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Get media
+router.get('/:mediaId', async (req, res) => {
+    try {
+        const { mediaId } = req.params;
+        // TODO: Add actual media fetching logic
+        res.json({
+            message: 'Get media endpoint',
+            mediaId
+        });
+    } catch (error) {
+        console.error('Get media error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Delete media
+router.delete('/:mediaId', async (req, res) => {
+    try {
+        const { mediaId } = req.params;
+        // TODO: Add actual media deletion logic
+        res.json({
+            message: 'Delete media endpoint',
+            mediaId
+        });
+    } catch (error) {
+        console.error('Delete media error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+export default router; 

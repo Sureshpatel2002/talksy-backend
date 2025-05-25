@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 const User = require('../models/user');
 const auth = require('../middleware/auth');
@@ -271,4 +271,58 @@ router.post('/cleanup', auth, async (req, res) => {
     }
 });
 
-module.exports = router; 
+// Get user's notifications
+router.get('/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        // TODO: Add actual notification fetching logic
+        res.json({
+            message: 'Get notifications endpoint',
+            userId
+        });
+    } catch (error) {
+        console.error('Get notifications error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Create notification
+router.post('/', async (req, res) => {
+    try {
+        const { userId, type, content, data } = req.body;
+        // TODO: Add actual notification creation logic
+        res.status(201).json({
+            message: 'Create notification endpoint',
+            userId,
+            type,
+            content,
+            data
+        });
+    } catch (error) {
+        console.error('Create notification error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Mark notification as read
+router.put('/:notificationId/read', async (req, res) => {
+    try {
+        const { notificationId } = req.params;
+        // TODO: Add actual notification read logic
+        res.json({
+            message: 'Mark notification as read endpoint',
+            notificationId
+        });
+    } catch (error) {
+        console.error('Mark notification as read error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+export default router; 

@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 const Conversation = require('../models/conversation');
 const Message = require('../models/message');
@@ -29,35 +29,75 @@ router.post('/get', async (req, res) => {
 });
 
 // Get all conversations for a user
-router.get('/user/:userId', async (req, res) => {
-  try {
-    const conversations = await Conversation.find({
-      participants: req.params.userId
-    })
-    .populate('lastMessage')
-    .sort({ updatedAt: -1 });
-
-    res.json(conversations);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+router.get('/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        // TODO: Add actual conversation fetching logic
+        res.json({
+            message: 'Get conversations endpoint',
+            userId
+        });
+    } catch (error) {
+        console.error('Get conversations error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
 });
 
-// Delete a conversation
+// Create a new conversation
+router.post('/', async (req, res) => {
+    try {
+        const { participants, type, name } = req.body;
+        // TODO: Add actual conversation creation logic
+        res.status(201).json({
+            message: 'Create conversation endpoint',
+            participants,
+            type,
+            name
+        });
+    } catch (error) {
+        console.error('Create conversation error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Update conversation
+router.put('/:conversationId', async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const updates = req.body;
+        // TODO: Add actual conversation update logic
+        res.json({
+            message: 'Update conversation endpoint',
+            conversationId,
+            updates
+        });
+    } catch (error) {
+        console.error('Update conversation error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Delete conversation
 router.delete('/:conversationId', async (req, res) => {
-  try {
-    // Delete all messages in the conversation
-    await Message.deleteMany({
-      conversationId: req.params.conversationId
-    });
-
-    // Delete the conversation
-    await Conversation.findByIdAndDelete(req.params.conversationId);
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    try {
+        const { conversationId } = req.params;
+        // TODO: Add actual conversation deletion logic
+        res.json({
+            message: 'Delete conversation endpoint',
+            conversationId
+        });
+    } catch (error) {
+        console.error('Delete conversation error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
 });
 
-module.exports = router; 
+export default router; 

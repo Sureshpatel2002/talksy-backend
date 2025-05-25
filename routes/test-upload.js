@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 const { upload, s3Client, testS3Connection } = require('../lib/s3Upload');
 
@@ -55,4 +55,34 @@ router.post('/test-upload', upload.single('testFile'), async (req, res) => {
     }
 });
 
-module.exports = router; 
+// Test file upload
+router.post('/test', async (req, res) => {
+    try {
+        // TODO: Add actual test upload logic
+        res.status(201).json({
+            message: 'Test upload endpoint'
+        });
+    } catch (error) {
+        console.error('Test upload error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Test S3 connection
+router.get('/test-s3', async (req, res) => {
+    try {
+        // TODO: Add actual S3 connection test logic
+        res.json({
+            message: 'S3 connection test endpoint'
+        });
+    } catch (error) {
+        console.error('S3 connection test error:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
+
+export default router; 
