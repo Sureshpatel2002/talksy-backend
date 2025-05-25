@@ -1,14 +1,14 @@
-const socketIO = require('socket.io');
-const Message = require('./models/message');
-const Conversation = require('./models/conversation');
-const User = require('./models/user');
-const Status = require('./models/status');
-const Chat = require('./models/chat');
+import { Server } from 'socket.io';
+import Message from './models/message.js';
+import Conversation from './models/conversation.js';
+import User from './models/user.js';
+import Status from './models/status.js';
+import Chat from './models/chat.js';
 
 let io;
 
 const initializeSocket = (server) => {
-  io = socketIO(server, {
+  io = new Server(server, {
     cors: {
       origin: "*",
       methods: ["GET", "POST"]
@@ -465,4 +465,7 @@ const initializeSocket = (server) => {
   return io;
 };
 
-module.exports = { initializeSocket }; 
+// Export a function to get the io instance
+export const getIO = () => io;
+
+export { initializeSocket }; 

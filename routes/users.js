@@ -2,7 +2,7 @@ import express from 'express';
 import User from '../models/user.js';
 import Conversation from '../models/conversation.js';
 import Message from '../models/message.js';
-import { io } from '../socket.js';
+import { getIO } from '../socket.js';
 
 const router = express.Router();
 
@@ -174,6 +174,7 @@ router.put('/:userId/contact', async (req, res) => {
         const updatedUser = await user.updateContactInfo(contactData);
 
         // Notify friends about profile update
+        const io = getIO();
         user.friends.forEach(friendId => {
             io.to(friendId).emit('user:profile:updated', {
                 userId,
