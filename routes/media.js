@@ -1,9 +1,10 @@
 import express from 'express';
+import { upload, s3Client, testS3Connection, getBucketUrl } from '../lib/s3Upload.js';
+import User from '../models/user.js';
+import auth from '../middleware/auth.js';
+import { DeleteObjectCommand } from '@aws-sdk/client-s3';
+
 const router = express.Router();
-const { upload, s3Client, testS3Connection, getBucketUrl } = require('../lib/s3Upload');
-const User = require('../models/user');
-const auth = require('../middleware/auth');
-const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 // Middleware to check S3 connection
 const checkS3Connection = async (req, res, next) => {

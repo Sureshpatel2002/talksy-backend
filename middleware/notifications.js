@@ -1,4 +1,4 @@
-const User = require('../models/user');
+import User from '../models/user.js';
 
 // Middleware to handle notification delivery with sound and badge
 const handleNotification = async (req, res, next) => {
@@ -84,7 +84,4 @@ const updateBadgeCount = async (req, res, next) => {
     }
 };
 
-module.exports = {
-    handleNotification,
-    updateBadgeCount
-}; 
+export { handleNotification, updateBadgeCount }; 

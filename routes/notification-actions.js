@@ -1,8 +1,9 @@
-const express = require('express');
+import express from 'express';
+import User from '../models/user.js';
+import auth from '../middleware/auth.js';
+import { handleNotification } from '../middleware/notifications.js';
+
 const router = express.Router();
-const User = require('../models/user');
-const auth = require('../middleware/auth');
-const { handleNotification } = require('../middleware/notifications');
 
 // Quick reply to message notification
 router.post('/reply', auth, async (req, res) => {
@@ -196,4 +197,4 @@ router.post('/return-call', auth, async (req, res) => {
     }
 });
 
-module.exports = router; 
+export default router; 

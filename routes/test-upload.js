@@ -1,6 +1,7 @@
 import express from 'express';
+import { upload, s3Client, testS3Connection } from '../lib/s3Upload.js';
+
 const router = express.Router();
-const { upload, s3Client, testS3Connection } = require('../lib/s3Upload');
 
 // Test S3 connection
 router.get('/test-connection', async (req, res) => {
