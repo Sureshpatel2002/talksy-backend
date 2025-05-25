@@ -154,116 +154,53 @@ async function findAvailablePort(startPort) {
     });
 }
 
-// Start server function
-async function startServer() {
-    try {
-        // Connect to MongoDB first
-        const isConnected = await connectDB();
-        if (!isConnected) {
-            console.error('Failed to connect to MongoDB. Exiting...');
-            process.exit(1);
-        }
+// Register routes
+app.get('/', (req, res) => res.send('API is live'));
+app.use('/api/health', require('./routes/health'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/messages', require('./routes/messages'));
+app.use('/api/conversations', require('./routes/conversations'));
+app.use('/api/chat', require('./routes/chat'));
+app.use('/api/status', require('./routes/status'));
+app.use('/api/media', require('./routes/media'));
+app.use('/api/test', require('./routes/test-upload'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/notification-actions', require('./routes/notification-actions'));
+app.use('/api/notification-analytics', require('./routes/notification-analytics'));
 
-        // Register routes
-        app.get('/', (req, res) => res.send('API is live'));
-        app.use('/api/health', require('./routes/health'));
-        app.use('/api/users', require('./routes/users'));
-        app.use('/api/messages', require('./routes/messages'));
-        app.use('/api/conversations', require('./routes/conversations'));
-        app.use('/api/chats', require('./routes/chats'));
-        app.use('/api/status', require('./routes/status'));
-        app.use('/api/images', require('./routes/images'));
-        app.use('/api/test', require('./routes/test-upload'));
+const port = await findAvailablePort(process.env.PORT || 3000);
+console.log(`Attempting to start server on port ${port}...`);
 
-        const port = await findAvailablePort(process.env.PORT || 3000);
-        console.log(`Attempting to start server on port ${port}...`);
-        
-        server.listen(port, () => {
-            console.log(`✅ Server is running on port ${port}`);
-            console.log(`Health check available at: http://localhost:${port}/api/health`);
-        });
-    } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
-    }
-}
-
-// Start the server
-startServer();
-
-// User Events
-io.on('connection', (socket) => {
-  socket.on('user:connect', (userId) => {
-    // Connect user
-  });
-
-  socket.on('user:status', ({ userId, isOnline }) => {
-    // User online/offline status
-  });
-
-  socket.on('user:status:updated', ({ userId, status }) => {
-    // User status update
-  });
-});
-
-// Message Events
-io.on('connection', (socket) => {
-  socket.on('message:send', (messageData) => {
-    // Send message
-  });
-
-  socket.on('message:sent', (message) => {
-    // Message sent confirmation
-  });
-
-  socket.on('message:receive', (message) => {
-    // Receive new message
-  });
-
-  socket.on('message:read', ({ messageId, readBy }) => {
-    // Message read status
-  });
-
-  socket.on('message:error', ({ error }) => {
-    // Message error
-  });
-});
-
-// Typing Events
-io.on('connection', (socket) => {
-  socket.on('typing:start', ({ conversationId, userId }) => {
-    // Start typing
-  });
-
-  socket.on('typing:stop', ({ conversationId, userId }) => {
-    // Stop typing
-  });
+server.listen(port, () => {
+    console.log(`✅ Server is running on port ${port}`);
+    console.log(`Health check available at: http://localhost:${port}/api/health`);
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error details:', {
-    message: err.message,
-    stack: err.stack,
-    path: req.path,
-    method: req.method,
-    body: req.body,
-    file: req.file
-  });
-  
-  if (err instanceof multer.MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        error: 'File size too large. Maximum size is 5MB'
-      });
-    }
-    return res.status(400).json({
-      error: err.message
+    console.error('Error details:', {
+        message: err.message,
+        stack: err.stack,
+        path: req.path,
+        method: req.method,
+        body: req.body,
+        file: req.file
     });
-  }
-  
-  res.status(500).json({ 
-    error: 'Something went wrong!',
-    message: err.message
-  });
+    
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({
+                error: 'File size too large. Maximum size is 5MB'
+            });
+        }
+        return res.status(400).json({
+            error: err.message
+        });
+    }
+    
+    res.status(500).json({ 
+        error: 'Something went wrong!',
+        message: err.message
+    });
 });

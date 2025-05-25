@@ -1,118 +1,123 @@
 const express = require('express');
 const router = express.Router();
-const { upload, getSignedUrl } = require('../lib/s3Upload');
+const { upload, s3Client, testS3Connection } = require('../lib/s3Upload');
 const User = require('../models/user');
 const Status = require('../models/status');
 const auth = require('../middleware/auth');
 
+// Middleware to check S3 connection before upload
+const checkS3Connection = async (req, res, next) => {
+    try {
+        const isConnected = await testS3Connection();
+        if (!isConnected) {
+            return res.status(500).json({
+                message: 'S3 connection failed',
+                error: 'S3_CONNECTION_ERROR'
+            });
+        }
+        next();
+    } catch (error) {
+        console.error('S3 connection check failed:', error);
+        res.status(500).json({
+            message: 'S3 connection check failed',
+            error: 'S3_CONNECTION_ERROR',
+            details: error.message
+        });
+    }
+};
+
 // Upload profile image
-router.post('/upload/:userId', upload.single('image'), async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    if (!req.file) {
-      return res.status(400).json({ 
-        message: 'No file uploaded',
-        error: 'FILE_MISSING'
-      });
-    }
-
-    console.log('File upload details:', {
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      originalname: req.file.originalname,
-      location: req.file.location
-    });
-
-    // Get the S3 file URL
-    const imageUrl = req.file.location;
-
-    if (!imageUrl) {
-      return res.status(500).json({ 
-        message: 'Failed to get S3 URL',
-        error: 'S3_URL_MISSING',
-        details: {
-          file: req.file
+router.post('/upload/:userId', auth, checkS3Connection, upload.single('image'), async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        if (!req.file) {
+            return res.status(400).json({
+                message: 'No file uploaded',
+                error: 'FILE_MISSING'
+            });
         }
-      });
-    }
 
-    // Update user's profile picture with timeout
-    const updatePromise = User.findOneAndUpdate(
-      { uid: userId },
-      { $set: { photoUrl: imageUrl } },
-      { new: true }
-    );
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Database update timed out')), 10000);
-    });
-
-    const updatedUser = await Promise.race([updatePromise, timeoutPromise]);
-
-    if (!updatedUser) {
-      return res.status(404).json({ 
-        message: 'User not found',
-        error: 'USER_NOT_FOUND',
-        userId
-      });
-    }
-
-    res.json({
-      message: 'Profile image uploaded successfully',
-      photoUrl: imageUrl
-    });
-  } catch (err) {
-    console.error('Error uploading image:', {
-      name: err.name,
-      message: err.message,
-      stack: err.stack,
-      code: err.code
-    });
-    
-    // Handle specific AWS errors
-    if (err.name === 'SignatureDoesNotMatch') {
-      return res.status(500).json({ 
-        message: 'AWS credentials error',
-        error: 'AWS_CREDENTIALS_ERROR',
-        details: {
-          name: err.name,
-          message: err.message,
-          code: err.code
+        // Validate file
+        if (!req.file.mimetype.startsWith('image/')) {
+            return res.status(400).json({
+                message: 'Invalid file type. Only images are allowed.',
+                error: 'INVALID_FILE_TYPE'
+            });
         }
-      });
-    }
-    
-    if (err.name === 'NoSuchBucket') {
-      return res.status(500).json({ 
-        message: 'AWS bucket not found',
-        error: 'AWS_BUCKET_ERROR',
-        details: {
-          name: err.name,
-          message: err.message,
-          code: err.code
+
+        // Get the S3 file URL
+        const imageUrl = req.file.location;
+        if (!imageUrl) {
+            return res.status(500).json({
+                message: 'Failed to get S3 URL',
+                error: 'S3_URL_MISSING'
+            });
         }
-      });
-    }
 
-    if (err.message === 'Database update timed out') {
-      return res.status(504).json({
-        message: 'Request timed out',
-        error: 'TIMEOUT_ERROR',
-        details: 'Database update took too long'
-      });
-    }
+        // Update user's profile picture with timeout
+        const updatePromise = User.findOneAndUpdate(
+            { uid: userId },
+            { $set: { photoUrl: imageUrl } },
+            { new: true }
+        );
 
-    res.status(500).json({ 
-      message: err.message || 'Internal server error',
-      error: 'UPLOAD_ERROR',
-      details: {
-        name: err.name,
-        message: err.message,
-        code: err.code
-      }
-    });
-  }
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Database update timed out')), 10000);
+        });
+
+        const updatedUser = await Promise.race([updatePromise, timeoutPromise]);
+
+        if (!updatedUser) {
+            return res.status(404).json({
+                message: 'User not found',
+                error: 'USER_NOT_FOUND',
+                userId
+            });
+        }
+
+        res.json({
+            message: 'Profile image uploaded successfully',
+            photoUrl: imageUrl
+        });
+    } catch (error) {
+        console.error('Error uploading image:', {
+            name: error.name,
+            message: error.message,
+            code: error.code
+        });
+
+        // Handle specific errors
+        if (error.name === 'SignatureDoesNotMatch') {
+            return res.status(500).json({
+                message: 'AWS credentials error',
+                error: 'AWS_CREDENTIALS_ERROR',
+                details: error.message
+            });
+        }
+
+        if (error.name === 'NoSuchBucket') {
+            return res.status(500).json({
+                message: 'AWS bucket not found',
+                error: 'AWS_BUCKET_ERROR',
+                details: error.message
+            });
+        }
+
+        if (error.message === 'Database update timed out') {
+            return res.status(504).json({
+                message: 'Request timed out',
+                error: 'TIMEOUT_ERROR',
+                details: 'Database update took too long'
+            });
+        }
+
+        res.status(500).json({
+            message: 'Internal server error',
+            error: 'UPLOAD_ERROR',
+            details: error.message
+        });
+    }
 });
 
 // Upload status
@@ -207,18 +212,25 @@ router.post('/status/:statusId/view', auth, async (req, res) => {
 
 // Get profile image
 router.get('/:userId', async (req, res) => {
-  try {
-    const user = await User.findOne({ uid: req.params.userId });
-    
-    if (!user || !user.photoUrl) {
-      return res.status(404).json({ message: 'Profile image not found' });
-    }
+    try {
+        const user = await User.findOne({ uid: req.params.userId });
+        
+        if (!user || !user.photoUrl) {
+            return res.status(404).json({
+                message: 'Profile image not found',
+                error: 'IMAGE_NOT_FOUND'
+            });
+        }
 
-    res.json({ photoUrl: user.photoUrl });
-  } catch (err) {
-    console.error('Error getting profile image:', err);
-    res.status(500).json({ message: err.message });
-  }
+        res.json({ photoUrl: user.photoUrl });
+    } catch (error) {
+        console.error('Error getting profile image:', error);
+        res.status(500).json({
+            message: 'Internal server error',
+            error: 'FETCH_ERROR',
+            details: error.message
+        });
+    }
 });
 
 module.exports = router; 

@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/user');
 const Conversation = require('../models/conversation');
 const Message = require('../models/message');
+const { io } = require('../socket');
 
 // Create or update user
 router.post('/update', async (req, res) => {
@@ -152,6 +153,186 @@ router.get('/all/:currentUserId', async (req, res) => {
     console.error('Error fetching users:', err);
     res.status(500).json({ message: err.message });
   }
+});
+
+// Update user's contact information
+router.put('/:userId/contact', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const contactData = req.body;
+
+        const user = await User.findOne({ uid: userId });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found',
+                code: 'USER_NOT_FOUND'
+            });
+        }
+
+        const updatedUser = await user.updateContactInfo(contactData);
+
+        // Notify friends about profile update
+        user.friends.forEach(friendId => {
+            io.to(friendId).emit('user:profile:updated', {
+                userId,
+                updates: {
+                    phoneNumber: updatedUser.phoneNumber,
+                    countryCode: updatedUser.countryCode,
+                    address: updatedUser.address,
+                    socialLinks: updatedUser.socialLinks,
+                    dateOfBirth: updatedUser.dateOfBirth,
+                    gender: updatedUser.gender,
+                    language: updatedUser.language,
+                    timezone: updatedUser.timezone
+                }
+            });
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Contact information updated successfully',
+            user: updatedUser.getPublicProfile()
+        });
+    } catch (error) {
+        console.error('Error updating contact information:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error updating contact information',
+            error: error.message,
+            code: 'SERVER_ERROR'
+        });
+    }
+});
+
+// Update user's privacy settings
+router.put('/:userId/privacy', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const settings = req.body;
+
+        const user = await User.findOne({ uid: userId });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found',
+                code: 'USER_NOT_FOUND'
+            });
+        }
+
+        const updatedUser = await user.updatePrivacySettings(settings);
+
+        res.status(200).json({
+            success: true,
+            message: 'Privacy settings updated successfully',
+            privacySettings: updatedUser.privacySettings
+        });
+    } catch (error) {
+        console.error('Error updating privacy settings:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error updating privacy settings',
+            error: error.message,
+            code: 'SERVER_ERROR'
+        });
+    }
+});
+
+// Get user's public profile
+router.get('/:userId/profile', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const requestingUserId = req.query.requestingUserId;
+
+        const user = await User.findOne({ uid: userId });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found',
+                code: 'USER_NOT_FOUND'
+            });
+        }
+
+        // If requesting user is a friend, show more information
+        const isFriend = user.friends.includes(requestingUserId);
+        const profile = isFriend ? user : user.getPublicProfile();
+
+        res.status(200).json({
+            success: true,
+            profile
+        });
+    } catch (error) {
+        console.error('Error getting user profile:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting user profile',
+            error: error.message,
+            code: 'SERVER_ERROR'
+        });
+    }
+});
+
+// Verify phone number
+router.post('/:userId/verify-phone', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { phoneNumber, verificationCode } = req.body;
+
+        const user = await User.findOne({ uid: userId });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found',
+                code: 'USER_NOT_FOUND'
+            });
+        }
+
+        // TODO: Implement actual phone verification logic
+        // For now, just update the phone number
+        user.phoneNumber = phoneNumber;
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Phone number verified successfully'
+        });
+    } catch (error) {
+        console.error('Error verifying phone number:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error verifying phone number',
+            error: error.message,
+            code: 'SERVER_ERROR'
+        });
+    }
+});
+
+// Search users by phone number
+router.get('/search/phone', async (req, res) => {
+    try {
+        const { phoneNumber } = req.query;
+        const requestingUserId = req.query.requestingUserId;
+
+        const users = await User.find({
+            phoneNumber: { $regex: phoneNumber, $options: 'i' },
+            'privacySettings.showPhoneNumber': true
+        });
+
+        const profiles = users.map(user => user.getPublicProfile());
+
+        res.status(200).json({
+            success: true,
+            users: profiles
+        });
+    } catch (error) {
+        console.error('Error searching users:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error searching users',
+            error: error.message,
+            code: 'SERVER_ERROR'
+        });
+    }
 });
 
 module.exports = router;

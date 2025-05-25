@@ -1,28 +1,57 @@
 const express = require('express');
 const router = express.Router();
-const { upload } = require('../lib/s3Upload');
+const { upload, s3Client, testS3Connection } = require('../lib/s3Upload');
 
-// Test route for file upload
-router.post('/test', upload.single('file'), (req, res) => {
+// Test S3 connection
+router.get('/test-connection', async (req, res) => {
+    try {
+        const isConnected = await testS3Connection();
+        if (!isConnected) {
+            return res.status(500).json({
+                message: 'S3 connection test failed',
+                error: 'S3_CONNECTION_ERROR'
+            });
+        }
+        res.json({
+            message: 'S3 connection test successful',
+            status: 'connected'
+        });
+    } catch (error) {
+        console.error('S3 connection test failed:', error);
+        res.status(500).json({
+            message: 'S3 connection test failed',
+            error: 'S3_CONNECTION_ERROR',
+            details: error.message
+        });
+    }
+});
+
+// Test file upload
+router.post('/test-upload', upload.single('testFile'), async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ message: 'No file uploaded' });
+            return res.status(400).json({
+                message: 'No file uploaded',
+                error: 'FILE_MISSING'
+            });
         }
 
         res.json({
-            message: 'File uploaded successfully',
+            message: 'Test upload successful',
             file: {
-                location: req.file.location,
-                key: req.file.key,
-                bucket: req.file.bucket,
                 originalname: req.file.originalname,
                 mimetype: req.file.mimetype,
-                size: req.file.size
+                size: req.file.size,
+                location: req.file.location
             }
         });
     } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({ message: 'Upload failed', error: error.message });
+        console.error('Test upload failed:', error);
+        res.status(500).json({
+            message: 'Test upload failed',
+            error: 'UPLOAD_ERROR',
+            details: error.message
+        });
     }
 });
 

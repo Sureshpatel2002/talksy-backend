@@ -3,6 +3,7 @@ const Message = require('./models/message');
 const Conversation = require('./models/conversation');
 const User = require('./models/user');
 const Status = require('./models/status');
+const Chat = require('./models/chat');
 
 let io;
 
@@ -16,62 +17,224 @@ const initializeSocket = (server) => {
 
   // Store online users
   const onlineUsers = new Map();
+  const userRooms = new Map();
 
   io.on('connection', (socket) => {
     console.log('New client connected:', socket.id);
 
     // Handle user connection
     socket.on('user:connect', async (userId) => {
-      onlineUsers.set(userId, socket.id);
-      
-      // Update user's online status
-      await User.findOneAndUpdate(
-        { uid: userId },
-        { 
-          $set: { 
-            isOnline: true,
-            lastSeen: new Date()
-          }
+      try {
+        onlineUsers.set(userId, socket.id);
+        socket.userId = userId;
+        
+        // Update user's online status
+        const user = await User.findOne({ uid: userId });
+        if (user) {
+          await user.updateOnlineStatus(true);
+          io.emit('user:status', { userId, isOnline: true });
         }
-      );
-
-      // Broadcast user's online status
-      socket.broadcast.emit('user:status', {
-        userId,
-        isOnline: true
-      });
+      } catch (error) {
+        console.error('Error in user:connect:', error);
+      }
     });
 
-    // Handle user disconnection
-    socket.on('disconnect', async () => {
-      let disconnectedUserId;
-      
-      // Find and remove user from online users
-      for (const [userId, socketId] of onlineUsers.entries()) {
-        if (socketId === socket.id) {
-          disconnectedUserId = userId;
-          onlineUsers.delete(userId);
-          break;
-        }
+    // Handle new user registration
+    socket.on('user:new', async (userData) => {
+      try {
+        // Broadcast new user to all online users
+        io.emit('user:new', {
+          userId: userData.uid,
+          displayName: userData.displayName,
+          photoUrl: userData.photoUrl
+        });
+      } catch (error) {
+        console.error('Error broadcasting new user:', error);
       }
+    });
 
-      if (disconnectedUserId) {
-        // Update user's offline status
-        await User.findOneAndUpdate(
-          { uid: disconnectedUserId },
-          { 
-            $set: { 
-              isOnline: false,
-              lastSeen: new Date()
-            }
+    // Handle chat events
+    socket.on('chat:join', async ({ userId, chatId }) => {
+      try {
+        // Join chat room
+        socket.join(`chat:${chatId}`);
+        userRooms.set(userId, chatId);
+
+        // Get chat history
+        const messages = await Message.find({ chatId })
+          .sort({ createdAt: -1 })
+          .limit(50);
+
+        socket.emit('chat:history', messages);
+      } catch (error) {
+        console.error('Error joining chat:', error);
+      }
+    });
+
+    socket.on('chat:message', async (messageData) => {
+      try {
+        const { chatId, senderId, content, type } = messageData;
+
+        // Save message
+        const message = new Message({
+          chatId,
+          senderId,
+          content,
+          type,
+          timestamp: new Date()
+        });
+        await message.save();
+
+        // Broadcast to chat room
+        io.to(`chat:${chatId}`).emit('chat:message', message);
+
+        // Send notification to offline users
+        const chat = await Chat.findById(chatId).populate('participants');
+        chat.participants.forEach(participant => {
+          if (participant.uid !== senderId && !onlineUsers.has(participant.uid)) {
+            io.sendNotification(participant.uid, {
+              type: 'message',
+              fromUserId: senderId,
+              chatId,
+              messagePreview: content
+            });
           }
+        });
+      } catch (error) {
+        console.error('Error sending chat message:', error);
+      }
+    });
+
+    // Handle status events
+    socket.on('status:new', async (statusData) => {
+      try {
+        const { userId, content, mediaUrl, mediaType } = statusData;
+
+        // Create new status
+        const status = new Status({
+          userId,
+          content,
+          mediaUrl,
+          mediaType,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        });
+        await status.save();
+
+        // Update user's status
+        await User.findOneAndUpdate(
+          { uid: userId },
+          { $set: { status: statusData } }
         );
 
-        // Broadcast user's offline status
-        io.emit('user:status', {
-          userId: disconnectedUserId,
-          isOnline: false
-        });
+        // Broadcast new status
+        io.emit('status:new', status);
+
+        // Send notifications to friends
+        const user = await User.findOne({ uid: userId });
+        if (user) {
+          const friends = await User.find({ 
+            uid: { $in: user.friends || [] } 
+          });
+          
+          friends.forEach(friend => {
+            io.sendNotification(friend.uid, {
+              type: 'status_new',
+              fromUserId: userId,
+              statusId: status._id,
+              message: `${user.displayName} posted a new status`
+            });
+          });
+        }
+      } catch (error) {
+        console.error('Error creating new status:', error);
+      }
+    });
+
+    socket.on('status:update', async (statusData) => {
+      try {
+        const { userId, statusId, content, mediaUrl, mediaType } = statusData;
+
+        // Update status
+        const status = await Status.findByIdAndUpdate(
+          statusId,
+          { 
+            $set: { 
+              content,
+              mediaUrl,
+              mediaType,
+              updatedAt: new Date()
+            } 
+          },
+          { new: true }
+        );
+
+        // Update user's status
+        await User.findOneAndUpdate(
+          { uid: userId },
+          { $set: { status: statusData } }
+        );
+
+        // Broadcast status update
+        io.emit('status:update', status);
+      } catch (error) {
+        console.error('Error updating status:', error);
+      }
+    });
+
+    socket.on('status:view', async ({ statusId, userId }) => {
+      try {
+        const status = await Status.findById(statusId);
+        if (!status) return;
+
+        // Add viewer if not already viewed
+        if (!status.viewers.some(viewer => viewer.userId === userId)) {
+          status.viewers.push({
+            userId,
+            viewedAt: new Date()
+          });
+          await status.save();
+
+          // Notify status owner
+          const ownerSocketId = onlineUsers.get(status.userId);
+          if (ownerSocketId) {
+            io.to(ownerSocketId).emit('status:viewed', {
+              statusId,
+              userId
+            });
+
+            // Send notification if owner is offline
+            if (!onlineUsers.has(status.userId)) {
+              io.sendNotification(status.userId, {
+                type: 'status_view',
+                fromUserId: userId,
+                statusId,
+                message: 'Someone viewed your status'
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error viewing status:', error);
+      }
+    });
+
+    // Handle disconnection
+    socket.on('disconnect', async () => {
+      if (socket.userId) {
+        const userId = socket.userId;
+        onlineUsers.delete(userId);
+        userRooms.delete(userId);
+
+        try {
+          const user = await User.findOne({ uid: userId });
+          if (user) {
+            await user.updateOnlineStatus(false);
+            io.emit('user:status', { userId, isOnline: false });
+          }
+        } catch (error) {
+          console.error('Error in disconnect:', error);
+        }
       }
     });
 
@@ -264,7 +427,40 @@ const initializeSocket = (server) => {
         socket.emit('status:error', { error: error.message });
       }
     });
+
+    // Handle notification events
+    socket.on('notification:subscribe', (userId) => {
+      socket.join(`notifications:${userId}`);
+    });
+
+    socket.on('notification:unsubscribe', (userId) => {
+      socket.leave(`notifications:${userId}`);
+    });
   });
+
+  // Function to send notification to specific user
+  io.sendNotification = async (userId, notification) => {
+    try {
+      const user = await User.findOne({ uid: userId });
+      if (user) {
+        await user.addNotification(notification);
+        io.to(`notifications:${userId}`).emit('notification:new', notification);
+      }
+    } catch (error) {
+      console.error('Error sending notification:', error);
+    }
+  };
+
+  // Function to send notification to multiple users
+  io.sendNotificationToUsers = async (userIds, notification) => {
+    try {
+      for (const userId of userIds) {
+        await io.sendNotification(userId, notification);
+      }
+    } catch (error) {
+      console.error('Error sending notifications to users:', error);
+    }
+  };
 
   return io;
 };
