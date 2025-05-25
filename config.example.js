@@ -1,5 +1,6 @@
 // This is an example configuration file. In production, these values should come from environment variables.
-require('dotenv').config();
+import dotenv from 'dotenv';
+dotenv.config();
 
 const config = {
     aws: {
@@ -26,4 +27,4 @@ if (missingEnvVars.length > 0) {
     process.exit(1);
 }
 
-module.exports = config; 
+export default config; 
