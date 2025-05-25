@@ -1,9 +1,10 @@
 import express from 'express';
+import User from '../models/user.js';
+import Conversation from '../models/conversation.js';
+import Message from '../models/message.js';
+import { io } from '../socket.js';
+
 const router = express.Router();
-const User = require('../models/user');
-const Conversation = require('../models/conversation');
-const Message = require('../models/message');
-const { io } = require('../socket');
 
 // Create or update user
 router.post('/update', async (req, res) => {

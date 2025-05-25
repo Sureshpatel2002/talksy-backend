@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const reactionSchema = new mongoose.Schema({
     userId: {
@@ -544,4 +544,4 @@ userSchema.methods.getPublicProfile = function() {
 
 const User = mongoose.model('User', userSchema);
 
-module.exports = User;
+export default User;

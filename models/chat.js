@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const reactionSchema = new mongoose.Schema({
     userId: {
@@ -243,4 +243,4 @@ chatSchema.methods.searchMessages = function(query, options = {}) {
 
 const Chat = mongoose.model('Chat', chatSchema);
 
-module.exports = Chat; 
+export default Chat; 

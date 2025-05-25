@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const StatusSchema = new mongoose.Schema({
   userId: {
@@ -38,4 +38,6 @@ const StatusSchema = new mongoose.Schema({
 // Index for automatic deletion of expired statuses
 StatusSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
 
-module.exports = mongoose.model('Status', StatusSchema); 
+const Status = mongoose.model('Status', StatusSchema);
+
+export default Status; 
