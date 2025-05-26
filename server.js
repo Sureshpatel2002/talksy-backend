@@ -106,14 +106,18 @@ const connectDB = async () => {
     await mongoose.connect(uri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 45000,
-      maxPoolSize: 10,
-      minPoolSize: 5,
+      serverSelectionTimeoutMS: 60000,
+      socketTimeoutMS: 90000,
+      maxPoolSize: 50,
+      minPoolSize: 10,
       retryWrites: true,
       w: 'majority',
-      connectTimeoutMS: 30000,
-      heartbeatFrequencyMS: 10000
+      connectTimeoutMS: 60000,
+      heartbeatFrequencyMS: 20000,
+      maxIdleTimeMS: 60000,
+      waitQueueTimeoutMS: 60000,
+      retryReads: true,
+      family: 4
     });
     
     // Handle connection events

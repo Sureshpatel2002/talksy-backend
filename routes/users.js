@@ -32,35 +32,74 @@ router.post('/update', async (req, res) => {
       });
     }
 
-    // Create or update user
-    const user = await User.findOneAndUpdate(
-      { uid },
-      { 
-        $set: { 
-          name, 
-          photoUrl, 
-          email, 
-          bio, 
-          age, 
-          gender, 
-          fcmToken, 
-          status, 
-          isOnline, 
-          lastSeen: lastSeen ? new Date(lastSeen) : new Date()
-        } 
-      },
-      { upsert: true, new: true }
-    );
+    // Check if user exists
+    let user = await User.findOne({ uid });
+    
+    if (!user) {
+      // Create new user
+      user = new User({
+        uid,
+        displayName: name || 'New User',
+        email: email || '',
+        photoUrl: photoUrl || null,
+        bio: bio || '',
+        age: age || null,
+        gender: gender || 'prefer_not_to_say',
+        fcmToken: fcmToken || null,
+        status: status || '',
+        isOnline: isOnline || false,
+        lastSeen: lastSeen ? new Date(lastSeen) : new Date()
+      });
+    } else {
+      // Update existing user
+      user.displayName = name || user.displayName;
+      user.email = email || user.email;
+      user.photoUrl = photoUrl || user.photoUrl;
+      user.bio = bio || user.bio;
+      user.age = age || user.age;
+      user.gender = gender || user.gender;
+      user.fcmToken = fcmToken || user.fcmToken;
+      user.status = status || user.status;
+      user.isOnline = isOnline !== undefined ? isOnline : user.isOnline;
+      user.lastSeen = lastSeen ? new Date(lastSeen) : new Date();
+    }
+
+    // Save user with timeout
+    const savePromise = user.save();
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Save operation timed out')), 30000);
+    });
+
+    await Promise.race([savePromise, timeoutPromise]);
 
     // Return success response
     return res.status(200).json({
       success: true,
-      message: 'Profile updated successfully',
+      message: user.isNew ? 'Profile created successfully' : 'Profile updated successfully',
       profile: user.getPublicProfile()
     });
 
   } catch (err) {
     console.error('Error updating user:', err);
+    
+    // Handle specific errors
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        error: err.message,
+        code: 'VALIDATION_ERROR'
+      });
+    }
+
+    if (err.message === 'Save operation timed out') {
+      return res.status(504).json({
+        success: false,
+        message: 'Operation timed out',
+        code: 'TIMEOUT_ERROR'
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: 'Error updating profile',
