@@ -79,14 +79,21 @@ const connectDB = async () => {
     const uriParts = uri.split('@');
     const protocol = uriParts[0].split('://')[0];
     const hostPart = uriParts[uriParts.length - 1]?.split('/')[0] || '';
+    const dbName = uriParts[uriParts.length - 1]?.split('/')[1]?.split('?')[0] || '';
     
     console.log('MongoDB URI Format Check:');
     console.log('Protocol:', protocol);
     console.log('Host part:', hostPart);
+    console.log('Database name:', dbName);
     console.log('URI starts with mongodb:// or mongodb+srv://:', 
       uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://'));
     console.log('Contains @ symbol:', uri.includes('@'));
     console.log('Contains hostname:', hostPart.includes('.'));
+    
+    // Validate database name
+    if (dbName !== 'flutter_app') {
+      throw new Error(`Invalid database name: ${dbName}. Must use 'flutter_app' database`);
+    }
     
     // Validate MongoDB URI format
     if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
@@ -110,18 +117,19 @@ const connectDB = async () => {
     const mongooseOptions = {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 30000, // Reduced from 60000
-      socketTimeoutMS: 45000, // Reduced from 90000
-      maxPoolSize: 10, // Reduced from 50
-      minPoolSize: 5, // Reduced from 10
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+      maxPoolSize: 10,
+      minPoolSize: 5,
       retryWrites: true,
       w: 'majority',
-      connectTimeoutMS: 30000, // Reduced from 60000
-      heartbeatFrequencyMS: 10000, // Reduced from 20000
-      maxIdleTimeMS: 30000, // Reduced from 60000
-      waitQueueTimeoutMS: 30000, // Reduced from 60000
+      connectTimeoutMS: 30000,
+      heartbeatFrequencyMS: 10000,
+      maxIdleTimeMS: 30000,
+      waitQueueTimeoutMS: 30000,
       retryReads: true,
-      family: 4
+      family: 4,
+      dbName: 'flutter_app' // Explicitly set database name
     };
 
     console.log('Mongoose options:', JSON.stringify(mongooseOptions, null, 2));
@@ -141,9 +149,16 @@ const connectDB = async () => {
       console.log('MongoDB reconnected');
     });
 
-    // Test the connection
+    // Test the connection and verify database
     const collections = await mongoose.connection.db.listCollections().toArray();
     console.log('Available collections:', collections.map(c => c.name));
+    
+    // Verify we're in the correct database
+    const currentDb = mongoose.connection.db.databaseName;
+    if (currentDb !== 'flutter_app') {
+      throw new Error(`Connected to wrong database: ${currentDb}. Must use 'flutter_app' database`);
+    }
+    console.log('Connected to database:', currentDb);
 
     console.log('✅ MongoDB Connected');
     return true;
@@ -151,7 +166,7 @@ const connectDB = async () => {
     console.error('❌ MongoDB Connection Error:', err.message);
     console.error('Error stack:', err.stack);
     console.error('Please check your MONGODB_URI format. It should look like:');
-    console.error('mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority');
+    console.error('mongodb+srv://<username>:<password>@<cluster>.mongodb.net/flutter_app?retryWrites=true&w=majority');
     console.error('Note: If your password contains special characters, they need to be URL encoded.');
     console.error('For example: @ becomes %40, # becomes %23, etc.');
     return false;
