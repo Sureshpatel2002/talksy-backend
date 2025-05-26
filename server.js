@@ -103,22 +103,30 @@ const connectDB = async () => {
     
     console.log('Attempting to connect to MongoDB...');
     
-    await mongoose.connect(uri, {
+    // Set mongoose debug mode
+    mongoose.set('debug', true);
+    
+    // Configure mongoose options
+    const mongooseOptions = {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 60000,
-      socketTimeoutMS: 90000,
-      maxPoolSize: 50,
-      minPoolSize: 10,
+      serverSelectionTimeoutMS: 30000, // Reduced from 60000
+      socketTimeoutMS: 45000, // Reduced from 90000
+      maxPoolSize: 10, // Reduced from 50
+      minPoolSize: 5, // Reduced from 10
       retryWrites: true,
       w: 'majority',
-      connectTimeoutMS: 60000,
-      heartbeatFrequencyMS: 20000,
-      maxIdleTimeMS: 60000,
-      waitQueueTimeoutMS: 60000,
+      connectTimeoutMS: 30000, // Reduced from 60000
+      heartbeatFrequencyMS: 10000, // Reduced from 20000
+      maxIdleTimeMS: 30000, // Reduced from 60000
+      waitQueueTimeoutMS: 30000, // Reduced from 60000
       retryReads: true,
       family: 4
-    });
+    };
+
+    console.log('Mongoose options:', JSON.stringify(mongooseOptions, null, 2));
+    
+    await mongoose.connect(uri, mongooseOptions);
     
     // Handle connection events
     mongoose.connection.on('error', (err) => {
@@ -133,10 +141,15 @@ const connectDB = async () => {
       console.log('MongoDB reconnected');
     });
 
+    // Test the connection
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    console.log('Available collections:', collections.map(c => c.name));
+
     console.log('✅ MongoDB Connected');
     return true;
   } catch (err) {
     console.error('❌ MongoDB Connection Error:', err.message);
+    console.error('Error stack:', err.stack);
     console.error('Please check your MONGODB_URI format. It should look like:');
     console.error('mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority');
     console.error('Note: If your password contains special characters, they need to be URL encoded.');

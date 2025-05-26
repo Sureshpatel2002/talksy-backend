@@ -8,6 +8,12 @@ const router = express.Router();
 
 // Create or update user
 router.post('/update', async (req, res) => {
+  console.log('Received user update request:', {
+    uid: req.body.uid,
+    name: req.body.name,
+    email: req.body.email
+  });
+
   try {
     const { 
       uid, 
@@ -25,6 +31,7 @@ router.post('/update', async (req, res) => {
 
     // Validate required fields
     if (!uid) {
+      console.log('Missing uid in request');
       return res.status(400).json({
         success: false,
         message: 'User ID is required',
@@ -32,10 +39,19 @@ router.post('/update', async (req, res) => {
       });
     }
 
-    // Check if user exists
-    let user = await User.findOne({ uid });
+    console.log('Checking if user exists:', uid);
+    
+    // Check if user exists with timeout
+    const findUserPromise = User.findOne({ uid });
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Find operation timed out')), 5000);
+    });
+
+    let user = await Promise.race([findUserPromise, timeoutPromise]);
+    console.log('User exists:', !!user);
     
     if (!user) {
+      console.log('Creating new user');
       // Create new user
       user = new User({
         uid,
@@ -51,6 +67,7 @@ router.post('/update', async (req, res) => {
         lastSeen: lastSeen ? new Date(lastSeen) : new Date()
       });
     } else {
+      console.log('Updating existing user');
       // Update existing user
       user.displayName = name || user.displayName;
       user.email = email || user.email;
@@ -64,13 +81,15 @@ router.post('/update', async (req, res) => {
       user.lastSeen = lastSeen ? new Date(lastSeen) : new Date();
     }
 
+    console.log('Saving user');
     // Save user with timeout
     const savePromise = user.save();
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Save operation timed out')), 30000);
+    const saveTimeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Save operation timed out')), 5000);
     });
 
-    await Promise.race([savePromise, timeoutPromise]);
+    await Promise.race([savePromise, saveTimeoutPromise]);
+    console.log('User saved successfully');
 
     // Return success response
     return res.status(200).json({
@@ -81,6 +100,7 @@ router.post('/update', async (req, res) => {
 
   } catch (err) {
     console.error('Error updating user:', err);
+    console.error('Error stack:', err.stack);
     
     // Handle specific errors
     if (err.name === 'ValidationError') {
@@ -92,7 +112,7 @@ router.post('/update', async (req, res) => {
       });
     }
 
-    if (err.message === 'Save operation timed out') {
+    if (err.message === 'Find operation timed out' || err.message === 'Save operation timed out') {
       return res.status(504).json({
         success: false,
         message: 'Operation timed out',

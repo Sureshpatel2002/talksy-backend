@@ -1,5 +1,8 @@
-require('dotenv').config();
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 async function testMongoDBConnection() {
     try {
@@ -42,6 +45,8 @@ async function testMongoDBConnection() {
             useNewUrlParser: true,
             useUnifiedTopology: true,
             serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 5000,
+            connectTimeoutMS: 5000
         });
 
         console.log('✅ MongoDB connection successful!');
@@ -50,6 +55,34 @@ async function testMongoDBConnection() {
         console.log('\n📊 Testing database access...');
         const collections = await mongoose.connection.db.listCollections().toArray();
         console.log('Available collections:', collections.map(c => c.name));
+
+        // Test user collection
+        console.log('\n👤 Testing user collection...');
+        const User = mongoose.model('User', new mongoose.Schema({
+            uid: String,
+            displayName: String,
+            email: String
+        }));
+
+        // Test find operation
+        console.log('Testing find operation...');
+        const startTime = Date.now();
+        const users = await User.find().limit(1);
+        const endTime = Date.now();
+        console.log(`Find operation took ${endTime - startTime}ms`);
+        console.log('Users found:', users.length);
+
+        // Test insert operation
+        console.log('\nTesting insert operation...');
+        const testUser = new User({
+            uid: 'test-' + Date.now(),
+            displayName: 'Test User',
+            email: 'test@example.com'
+        });
+        const insertStartTime = Date.now();
+        await testUser.save();
+        const insertEndTime = Date.now();
+        console.log(`Insert operation took ${insertEndTime - insertStartTime}ms`);
 
         // Clean up
         await mongoose.connection.close();
