@@ -8,21 +8,31 @@ const router = express.Router();
 
 // Create or update user
 router.post('/update', async (req, res) => {
-  const { 
-    uid, 
-    name, 
-    photoUrl, 
-    email, 
-    bio, 
-    age, 
-    gender, 
-    fcmToken, 
-    status, 
-    isOnline, 
-    lastSeen 
-  } = req.body;
-  
   try {
+    const { 
+      uid, 
+      name, 
+      photoUrl, 
+      email, 
+      bio, 
+      age, 
+      gender, 
+      fcmToken, 
+      status, 
+      isOnline, 
+      lastSeen 
+    } = req.body;
+
+    // Validate required fields
+    if (!uid) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required',
+        code: 'MISSING_USER_ID'
+      });
+    }
+
+    // Create or update user
     const user = await User.findOneAndUpdate(
       { uid },
       { 
@@ -41,9 +51,22 @@ router.post('/update', async (req, res) => {
       },
       { upsert: true, new: true }
     );
-    res.json(user);
+
+    // Return success response
+    return res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      profile: user.getPublicProfile()
+    });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error updating user:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating profile',
+      error: err.message,
+      code: 'SERVER_ERROR'
+    });
   }
 });
 
@@ -246,12 +269,24 @@ router.get('/:userId/profile', async (req, res) => {
         const { userId } = req.params;
         const requestingUserId = req.query.requestingUserId;
 
+        // Validate input
+        if (!userId || !requestingUserId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required parameters',
+                code: 'INVALID_PARAMETERS'
+            });
+        }
+
         const user = await User.findOne({ uid: userId });
+        
+        // If user doesn't exist, return 404 with proper message
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: 'User not found',
-                code: 'USER_NOT_FOUND'
+                message: 'User profile not found',
+                code: 'PROFILE_NOT_FOUND',
+                userId: userId
             });
         }
 
@@ -259,15 +294,19 @@ router.get('/:userId/profile', async (req, res) => {
         const isFriend = user.friends.includes(requestingUserId);
         const profile = isFriend ? user : user.getPublicProfile();
 
-        res.status(200).json({
+        // Return success response
+        return res.status(200).json({
             success: true,
-            profile
+            message: 'Profile retrieved successfully',
+            profile: profile,
+            isFriend: isFriend
         });
+
     } catch (error) {
         console.error('Error getting user profile:', error);
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
-            message: 'Error getting user profile',
+            message: 'Error retrieving profile',
             error: error.message,
             code: 'SERVER_ERROR'
         });
