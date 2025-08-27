@@ -1,102 +1,184 @@
 import express from 'express';
-import Conversation from '../models/conversation.js';
-import Message from '../models/message.js';
+import { conversationService, messageService } from '../services/s3Service.js';
 
 const router = express.Router();
 
-// Create or get conversation between two users
-router.post('/get', async (req, res) => {
-  try {
-    const { userId1, userId2 } = req.body;
-    
-    // Check if conversation already exists
-    let conversation = await Conversation.findOne({
-      participants: { $all: [userId1, userId2] }
-    });
-
-    if (!conversation) {
-      // Create new conversation
-      conversation = new Conversation({
-        participants: [userId1, userId2],
-        unreadCount: new Map([[userId1, 0], [userId2, 0]])
-      });
-      await conversation.save();
-    }
-
-    res.json(conversation);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Get all conversations for a user
-router.get('/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        // TODO: Add actual conversation fetching logic
-        res.json({
-            message: 'Get conversations endpoint',
-            userId
-        });
-    } catch (error) {
-        console.error('Get conversations error:', error);
-        res.status(500).json({
-            error: 'Internal server error'
-        });
-    }
-});
-
-// Create a new conversation
+// Create new conversation
 router.post('/', async (req, res) => {
     try {
-        const { participants, type, name } = req.body;
-        // TODO: Add actual conversation creation logic
+        const { participants } = req.body;
+        const conversation = await conversationService.createConversation(participants);
         res.status(201).json({
-            message: 'Create conversation endpoint',
-            participants,
+            status: 'success',
+            data: conversation
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+});
+
+// Get conversation
+router.get('/:conversationId', async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const conversation = await conversationService.getConversation(conversationId);
+        
+        if (!conversation) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Conversation not found'
+            });
+        }
+
+        res.json({
+            status: 'success',
+            data: conversation
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+});
+
+// Send message
+router.post('/:conversationId/messages', async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const { content, type = 'text', mediaUrl = null, replyTo = null } = req.body;
+        const senderId = req.user.userId;
+
+        const message = await messageService.createMessage(
+            conversationId, 
+            senderId, 
+            content, 
             type,
-            name
+            mediaUrl,
+            replyTo
+        );
+
+        await conversationService.updateLastMessage(conversationId, {
+            messageId: message.messageId,
+            content: message.content,
+            type: message.type,
+            senderId: message.senderId,
+            timestamp: message.timestamp
+        });
+
+        res.status(201).json({
+            status: 'success',
+            data: message
         });
     } catch (error) {
-        console.error('Create conversation error:', error);
-        res.status(500).json({
-            error: 'Internal server error'
+        res.status(400).json({
+            status: 'error',
+            message: error.message
         });
     }
 });
 
-// Update conversation
-router.put('/:conversationId', async (req, res) => {
+// Get messages with pagination
+router.get('/:conversationId/messages', async (req, res) => {
     try {
         const { conversationId } = req.params;
-        const updates = req.body;
-        // TODO: Add actual conversation update logic
-        res.json({
-            message: 'Update conversation endpoint',
+        const { limit = 50, lastEvaluatedKey } = req.query;
+        
+        const result = await messageService.getMessages(
             conversationId,
-            updates
+            parseInt(limit),
+            lastEvaluatedKey
+        );
+
+        res.json({
+            status: 'success',
+            data: result.messages,
+            lastEvaluatedKey: result.lastEvaluatedKey
         });
     } catch (error) {
-        console.error('Update conversation error:', error);
-        res.status(500).json({
-            error: 'Internal server error'
+        res.status(400).json({
+            status: 'error',
+            message: error.message
         });
     }
 });
 
-// Delete conversation
-router.delete('/:conversationId', async (req, res) => {
+// Edit message
+router.put('/:conversationId/messages/:messageId', async (req, res) => {
     try {
-        const { conversationId } = req.params;
-        // TODO: Add actual conversation deletion logic
+        const { conversationId, messageId } = req.params;
+        const { content } = req.body;
+        
+        const message = await messageService.editMessage(messageId, conversationId, content);
         res.json({
-            message: 'Delete conversation endpoint',
-            conversationId
+            status: 'success',
+            data: message
         });
     } catch (error) {
-        console.error('Delete conversation error:', error);
-        res.status(500).json({
-            error: 'Internal server error'
+        res.status(400).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+});
+
+// Add reaction to message
+router.post('/:conversationId/messages/:messageId/reactions', async (req, res) => {
+    try {
+        const { conversationId, messageId } = req.params;
+        const { reaction } = req.body;
+        const userId = req.user.userId;
+        
+        const message = await messageService.addReaction(messageId, conversationId, userId, reaction);
+        res.json({
+            status: 'success',
+            data: message
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+});
+
+// Remove reaction from message
+router.delete('/:conversationId/messages/:messageId/reactions', async (req, res) => {
+    try {
+        const { conversationId, messageId } = req.params;
+        const userId = req.user.userId;
+        
+        const message = await messageService.removeReaction(messageId, conversationId, userId);
+        res.json({
+            status: 'success',
+            data: message
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+});
+
+// Update message status
+router.put('/:conversationId/messages/:messageId/status', async (req, res) => {
+    try {
+        const { conversationId, messageId } = req.params;
+        const { status } = req.body;
+        
+        const message = await messageService.updateMessageStatus(messageId, conversationId, status);
+        res.json({
+            status: 'success',
+            data: message
+        });
+    } catch (error) {
+        res.status(400).json({
+            status: 'error',
+            message: error.message
         });
     }
 });

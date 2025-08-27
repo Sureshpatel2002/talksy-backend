@@ -1,258 +1,107 @@
-import dotenv from 'dotenv';
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
-import http from 'http';
-import { initializeSocket } from './socket.js';
-import multer from 'multer';
-import path from 'path';
-import net from 'net';
-import { fileURLToPath } from 'url';
-import healthRoutes from './routes/health.js';
+import dotenv from 'dotenv';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import jwt from 'jsonwebtoken';
 import userRoutes from './routes/users.js';
-import messageRoutes from './routes/messages.js';
-import conversationRoutes from './routes/conversations.js';
-import chatRoutes from './routes/chat.js';
 import statusRoutes from './routes/status.js';
-import mediaRoutes from './routes/media.js';
-import testUploadRoutes from './routes/test-upload.js';
-import authRoutes from './routes/auth.js';
+import conversationRoutes from './routes/conversations.js';
 import notificationRoutes from './routes/notifications.js';
-import notificationActionRoutes from './routes/notification-actions.js';
-import notificationAnalyticsRoutes from './routes/notification-analytics.js';
+import testNotificationRoutes from './routes/test-notification.js';
+import mediaRoutes from './routes/media.js';
 
-// Initialize dotenv
 dotenv.config();
 
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Debug environment variables
-console.log('Environment Check:');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
-console.log('AWS_ACCESS_KEY_ID exists:', !!process.env.AWS_ACCESS_KEY_ID);
-console.log('AWS_SECRET_ACCESS_KEY exists:', !!process.env.AWS_SECRET_ACCESS_KEY);
-console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
-
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
-
-// Increase timeout for all routes
-app.use((req, res, next) => {
-    res.setTimeout(300000, () => {
-        console.error('Request timeout');
-        res.status(504).json({
-            message: 'Request timeout',
-            error: 'TIMEOUT_ERROR'
-        });
-    });
-    next();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST']
+    }
 });
 
-// Serve static files from the public directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-const PORT = process.env.PORT || 3000;
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-// Create HTTP server
-const server = http.createServer(app);
-
-// Initialize Socket.IO
-const io = initializeSocket(server);
-
-// Make io accessible to routes
-app.set('io', io);
-
-// MongoDB Connection with options
-const connectDB = async () => {
-  try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error('MONGODB_URI is not defined in environment variables');
+    if (!token) {
+        return res.status(401).json({
+            status: 'error',
+            message: 'Authentication token required'
+        });
     }
 
-    // Log URI format (without sensitive data)
-    const uri = process.env.MONGODB_URI;
-    const uriParts = uri.split('@');
-    const protocol = uriParts[0].split('://')[0];
-    const hostPart = uriParts[uriParts.length - 1]?.split('/')[0] || '';
-    const dbName = uriParts[uriParts.length - 1]?.split('/')[1]?.split('?')[0] || '';
-    
-    console.log('MongoDB URI Format Check:');
-    console.log('Protocol:', protocol);
-    console.log('Host part:', hostPart);
-    console.log('Database name:', dbName);
-    console.log('URI starts with mongodb:// or mongodb+srv://:', 
-      uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://'));
-    console.log('Contains @ symbol:', uri.includes('@'));
-    console.log('Contains hostname:', hostPart.includes('.'));
-    
-    // Validate database name
-    if (dbName !== 'flutter_app') {
-      throw new Error(`Invalid database name: ${dbName}. Must use 'flutter_app' database`);
-    }
-    
-    // Validate MongoDB URI format
-    if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
-      throw new Error('Invalid MongoDB URI format. Must start with mongodb:// or mongodb+srv://');
-    }
-
-    if (!uri.includes('@')) {
-      throw new Error('Invalid MongoDB URI format. Must include username and password');
-    }
-
-    if (!hostPart.includes('.')) {
-      throw new Error('Invalid MongoDB URI format. Must include a valid hostname with domain');
-    }
-    
-    console.log('Attempting to connect to MongoDB...');
-    
-    // Set mongoose debug mode
-    mongoose.set('debug', true);
-    
-    // Configure mongoose options
-    const mongooseOptions = {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 45000,
-      maxPoolSize: 10,
-      minPoolSize: 5,
-      retryWrites: true,
-      w: 'majority',
-      connectTimeoutMS: 30000,
-      heartbeatFrequencyMS: 10000,
-      maxIdleTimeMS: 30000,
-      waitQueueTimeoutMS: 30000,
-      retryReads: true,
-      family: 4,
-      dbName: 'flutter_app' // Explicitly set database name
-    };
-
-    console.log('Mongoose options:', JSON.stringify(mongooseOptions, null, 2));
-    
-    await mongoose.connect(uri, mongooseOptions);
-    
-    // Handle connection events
-    mongoose.connection.on('error', (err) => {
-      console.error('MongoDB connection error:', err);
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Invalid or expired token'
+            });
+        }
+        req.user = user;
+        next();
     });
-
-    mongoose.connection.on('disconnected', () => {
-      console.log('MongoDB disconnected');
-    });
-
-    mongoose.connection.on('reconnected', () => {
-      console.log('MongoDB reconnected');
-    });
-
-    // Test the connection and verify database
-    const collections = await mongoose.connection.db.listCollections().toArray();
-    console.log('Available collections:', collections.map(c => c.name));
-    
-    // Verify we're in the correct database
-    const currentDb = mongoose.connection.db.databaseName;
-    if (currentDb !== 'flutter_app') {
-      throw new Error(`Connected to wrong database: ${currentDb}. Must use 'flutter_app' database`);
-    }
-    console.log('Connected to database:', currentDb);
-
-    console.log('✅ MongoDB Connected');
-    return true;
-  } catch (err) {
-    console.error('❌ MongoDB Connection Error:', err.message);
-    console.error('Error stack:', err.stack);
-    console.error('Please check your MONGODB_URI format. It should look like:');
-    console.error('mongodb+srv://<username>:<password>@<cluster>.mongodb.net/flutter_app?retryWrites=true&w=majority');
-    console.error('Note: If your password contains special characters, they need to be URL encoded.');
-    console.error('For example: @ becomes %40, # becomes %23, etc.');
-    return false;
-  }
 };
 
-// Function to find an available port
-async function findAvailablePort(startPort) {
-    // Ensure startPort is a number and within valid range
-    let port = parseInt(startPort, 10);
-    if (isNaN(port) || port < 0 || port > 65535) {
-        port = 3000; // Default to 3000 if invalid
-    }
-
-    return new Promise((resolve, reject) => {
-        const server = net.createServer();
-        server.unref();
-        
-        server.on('error', (err) => {
-            if (err.code === 'EADDRINUSE') {
-                // Port is in use, try the next one (max 10 attempts)
-                if (port < 3010) {
-                    resolve(findAvailablePort(port + 1));
-                } else {
-                    reject(new Error('No available ports found between 3000-3010'));
-                }
-            } else {
-                reject(err);
-            }
-        });
-        
-        server.listen(port, () => {
-            server.close(() => {
-                resolve(port);
-            });
-        });
-    });
-}
-
-// Register routes
-app.get('/', (req, res) => res.send('API is live'));
-app.use('/api/health', healthRoutes);
+// Routes
 app.use('/api/users', userRoutes);
-app.use('/api/messages', messageRoutes);
-app.use('/api/conversations', conversationRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/status', statusRoutes);
+app.use('/api/status', authenticateToken, statusRoutes);
+app.use('/api/conversations', authenticateToken, conversationRoutes);
+app.use('/api/notifications', authenticateToken, notificationRoutes);
+app.use('/api/test', testNotificationRoutes);
 app.use('/api/media', mediaRoutes);
-app.use('/api/test', testUploadRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/notification-actions', notificationActionRoutes);
-app.use('/api/notification-analytics', notificationAnalyticsRoutes);
 
-const port = await findAvailablePort(process.env.PORT || 3000);
-console.log(`Attempting to start server on port ${port}...`);
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
 
-server.listen(port, () => {
-    console.log(`✅ Server is running on port ${port}`);
-    console.log(`Health check available at: http://localhost:${port}/api/health`);
+    // Join user's room
+    socket.on('join', (userId) => {
+        socket.join(userId);
+    });
+
+    // Handle new message
+    socket.on('new_message', (data) => {
+        const { conversationId, message } = data;
+        io.to(conversationId).emit('message_received', message);
+    });
+
+    // Handle typing status
+    socket.on('typing', (data) => {
+        const { conversationId, userId, isTyping } = data;
+        socket.to(conversationId).emit('user_typing', { userId, isTyping });
+    });
+
+    // Handle online status
+    socket.on('online_status', (data) => {
+        const { userId, isOnline } = data;
+        io.emit('user_status_changed', { userId, isOnline });
+    });
+
+    // Handle disconnect
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+    });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error('Error details:', {
-        message: err.message,
-        stack: err.stack,
-        path: req.path,
-        method: req.method,
-        body: req.body,
-        file: req.file
-    });
-    
-    if (err instanceof multer.MulterError) {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-            return res.status(400).json({
-                error: 'File size too large. Maximum size is 5MB'
-            });
-        }
-        return res.status(400).json({
-            error: err.message
-        });
-    }
-    
-    res.status(500).json({ 
-        error: 'Something went wrong!',
-        message: err.message
+    console.error(err.stack);
+    res.status(500).json({
+        status: 'error',
+        message: err.message || 'Something went wrong!'
     });
 });
+
+const PORT = process.env.PORT || 3000;
+httpServer.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+}); 
